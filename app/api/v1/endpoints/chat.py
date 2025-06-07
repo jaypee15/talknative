@@ -39,10 +39,11 @@ async def clear_chat_session(
     session_id: str = Path(..., description="The session ID to clear.")
 ):
     """
-    Clears the conversation history for a given session and language.
+    Clears the conversation history for a given session and language from Redis
+    and removes the active chain instance from memory.
     """
     try:
-        llm_service.clear_session_chain(session_id, language_code)
+        llm_service.clear_chat_history_and_active_chain(session_id, language_code) # Updated call
         return
     except Exception as e:
         print(f"Error clearing session: {e}") # Replace with proper logging
