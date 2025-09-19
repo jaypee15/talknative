@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     
     OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str = ""
+    LLM_PROVIDER: str = "gemini"  # "openai" | "gemini"
+    LLM_MODEL: str = "models/gemini-2.5-flash"
     SUPABASE_URL: str | None = None
     SUPABASE_SERVICE_ROLE_KEY: str | None = None
     DATABASE_URL: str | None = None 

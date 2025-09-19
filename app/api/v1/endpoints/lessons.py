@@ -14,7 +14,6 @@ class LessonResponse(BaseModel):
 
 @router.get("/next", response_model=LessonResponse)
 async def get_next_lesson(db: AsyncSession = Depends(get_db_session)):
-    # Placeholder: pick next lesson from DB based on user progress
     return LessonResponse(lesson_id="demo-1", title="Greetings", content="Kedu? - How are you?")
 
 

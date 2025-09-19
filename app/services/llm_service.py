@@ -1,5 +1,6 @@
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain.chains import ConversationChain
 from langchain.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import RedisChatMessageHistory
@@ -12,6 +13,8 @@ from langchain.prompts import (
 from app.core.config import settings, LanguageCode
 
 os.environ["GOOGLE_API_KEY"] = settings.GEMINI_API_KEY
+if settings.OPENAI_API_KEY:
+    os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
 
 # In-memory store for ConversationChain instances (not the history itself anymore)
 # Key: (session_id, language_code_value)
@@ -43,9 +46,23 @@ def get_system_prompt_template(language_code: LanguageCode) -> str:
         return "You are a helpful assistant."
 
 
+def _build_llm():
+    provider = (settings.LLM_PROVIDER or "gemini").lower()
+    model = settings.LLM_MODEL
+    temperature = 0.7
+    if provider == "openai":
+        if not settings.OPENAI_API_KEY:
+            raise ValueError("OPENAI_API_KEY not configured.")
+        return ChatOpenAI(model=model or "gpt-4o-mini", temperature=temperature)
+    elif provider == "gemini":
+        if not settings.GEMINI_API_KEY:
+            raise ValueError("GEMINI_API_KEY not configured.")
+        return ChatGoogleGenerativeAI(model=model or "models/gemini-2.0-flash", temperature=temperature)
+    else:
+        raise ValueError(f"Unsupported LLM_PROVIDER: {provider}")
+
+
 def get_chat_chain(session_id: str, language_code: LanguageCode) -> ConversationChain:
-    if not settings.OPENAI_API_KEY:
-        raise ValueError("OPENAI_API_KEY not configured.")
 
     chain_key = (session_id, language_code.value)
 
@@ -53,10 +70,7 @@ def get_chat_chain(session_id: str, language_code: LanguageCode) -> Conversation
         return active_chains[chain_key]
 
     # LLM
-    llm = ChatGoogleGenerativeAI(
-        temperature=0.7,
-        model="models/gemini-2.0-flash",
-    )
+    llm = _build_llm()
 
     # Prompt
     system_prompt_content = get_system_prompt_template(language_code)

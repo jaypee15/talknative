@@ -30,6 +30,8 @@ GEMINI_API_KEY=
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+LLM_PROVIDER=gemini
+LLM_MODEL=models/gemini-2.0-flash
 ```
 
 ## Development
