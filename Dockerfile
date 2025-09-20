@@ -5,7 +5,9 @@ FROM node:18-alpine AS web-build
 WORKDIR /app/frontend
 # Copy manifest files; package-lock.json is optional
 COPY frontend/package*.json ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# Fix esbuild issues on Alpine (musl) by adding glibc compatibility
+RUN apk add --no-cache libc6-compat
+RUN if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
 COPY frontend .
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY

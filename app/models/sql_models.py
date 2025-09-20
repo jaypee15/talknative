@@ -101,3 +101,19 @@ class UserLessonProgress(Base):
     lesson: Mapped['Lesson'] = relationship("Lesson", back_populates="progress")
 
 
+class ConversationLog(Base):
+    __tablename__ = "conversation_logs"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    input_text: Mapped[str] = mapped_column(Text)
+    output_text: Mapped[str] = mapped_column(Text)
+    audio_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+

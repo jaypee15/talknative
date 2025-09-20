@@ -1,0 +1,57 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/talknative
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set image tags
+        id: vars
+        run: |
+          echo "IMAGE_TAG_SHA=sha-${GITHUB_SHA}" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG_LATEST=latest" >> $GITHUB_OUTPUT
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.IMAGE_TAG_LATEST }}
+            ${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.IMAGE_TAG_SHA }}
+
+  deploy-to-render:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - name: Trigger Render deploy hook
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK"
+
+
