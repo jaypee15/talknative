@@ -1,58 +1,197 @@
-# TalkNative Monorepo (Frontend + Backend)
+# TalkNatives POC
 
-Dockerized Vite React frontend and FastAPI backend.
+A conversational language learning app for Yoruba, Hausa, and Igbo using Gemini 2.5 Flash 8B and YarnGPT.
 
-## Quick start
+## Tech Stack
 
-1. Create `.env` based on the variables below
-2. Build and run:
+- **Frontend**: React + Vite + react-media-recorder
+- **Backend**: FastAPI + Pydantic AI
+- **AI/ASR**: Google Gemini 2.5 Flash (via Pydantic AI SDK)
+- **TTS**: YarnGPT API
+- **Database**: PostgreSQL (Supabase)
+- **Deployment**: Google Cloud Run (2 services)
 
-```bash
-docker compose up -d --build
-```
+## Local Development
 
-App: http://localhost/
-API: http://localhost/api/v1
+### Prerequisites
 
-## Environment variables
+- Docker & Docker Compose
+- Python 3.11+
+- Node.js 20+
 
-Add a `.env` file in repo root with:
+### Environment Setup
 
-```
-APP_NAME=Talk Native Backend
-API_V1_STR=/api/v1
-REDIS_URL=redis://redis:6379/0
-SECRET_KEY=change_me
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=10080
-OPENAI_API_KEY=
-GEMINI_API_KEY=
-SUPABASE_URL=
-SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-LLM_PROVIDER=gemini
-LLM_MODEL=models/gemini-2.0-flash
-```
-
-## Development
-
-- Frontend dev server: `cd frontend && npm i && VITE_SUPABASE_URL=... VITE_SUPABASE_ANON_KEY=... npm run dev`
-- Backend: `uvicorn app.main:app --reload`
-
-## Compose (single Dockerfile)
-
-The root `Dockerfile` builds the frontend and runs FastAPI + nginx. Redis runs as a separate service:
+1. Copy the example environment file:
 
 ```bash
-docker compose up -d --build
+cp backend/.env.example backend/.env
 ```
 
-### Development image
+2. Fill in your API keys in `backend/.env`:
 
-Use `Dockerfile.dev` by passing an env var to compose. This starts uvicorn with reload and Vite dev server.
+```env
+GOOGLE_API_KEY=your_google_api_key
+YARNGPT_API_KEY=your_yarngpt_api_key
+DATABASE_URL=your_supabase_postgres_url
+CORS_ALLOW_ORIGINS=["http://localhost:5173"]
+```
+
+### Run with Docker Compose
 
 ```bash
-DOCKERFILE=Dockerfile.dev docker compose up -d --build
-# Frontend: http://localhost:5173  API: http://localhost:8000
+docker-compose up --build
 ```
 
+- Frontend: http://localhost:5173
+- Backend: http://localhost:8080
+- Health Check: http://localhost:8080/healthz
+
+### Run Locally (without Docker)
+
+**Backend:**
+
+```bash
+cd backend
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn app.main:app --reload --port 8080
+```
+
+**Frontend:**
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Testing the POC Chain
+
+Test the full Gemini → YarnGPT pipeline:
+
+```bash
+cd backend
+python scripts/poc_chain.py path/to/audio.webm yoruba
+```
+
+Target: Total latency < 4 seconds
+
+## Database Migrations
+
+**Create a new migration:**
+
+```bash
+cd backend
+alembic revision --autogenerate -m "description"
+```
+
+**Apply migrations:**
+
+```bash
+alembic upgrade head
+```
+
+## Deployment
+
+### GitHub Secrets Required
+
+Set these in your GitHub repository settings:
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+- `GCP_SA_KEY` (Service Account JSON)
+- `GCP_PROJECT_ID`
+- `GCP_REGION` (e.g., `us-central1`)
+- `GOOGLE_API_KEY`
+- `YARNGPT_API_KEY`
+- `DATABASE_URL`
+- `CORS_ALLOW_ORIGINS` (JSON array string, e.g., `["https://your-frontend-url"]`)
+
+### Deploy
+
+Push to `main` branch:
+
+```bash
+git push origin main
+```
+
+The GitHub Actions workflow will:
+1. Build and push Docker images to DockerHub
+2. Deploy backend to Cloud Run
+3. Deploy frontend to Cloud Run with backend URL
+
+## Project Structure
+
+```
+.
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/
+│   │   │   └── chat.py          # Chat endpoint
+│   │   ├── ai/
+│   │   │   └── agent.py         # Pydantic AI Agent
+│   │   ├── core/
+│   │   │   └── config.py        # Settings
+│   │   ├── db/
+│   │   │   ├── base.py          # SQLAlchemy setup
+│   │   │   └── session.py       # DB session
+│   │   ├── models/
+│   │   │   ├── conversation.py
+│   │   │   └── turn.py
+│   │   ├── tts/
+│   │   │   └── yarngpt.py       # YarnGPT client
+│   │   └── main.py              # FastAPI app
+│   ├── alembic/                 # Migrations
+│   ├── scripts/
+│   │   └── poc_chain.py         # Test script
+│   ├── Dockerfile
+│   ├── entrypoint.sh
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx              # Main UI
+│   │   └── main.tsx
+│   ├── Dockerfile
+│   ├── package.json
+│   └── vite.config.ts
+├── .github/workflows/
+│   └── deploy.yml               # CI/CD
+└── docker-compose.yml
+```
+
+## Voice Mapping
+
+- **Yoruba**: idera (female)
+- **Hausa**: zainab (female)
+- **Igbo**: amaka (female)
+
+## API Endpoints
+
+### `POST /api/v1/chat`
+
+**Query Parameters:**
+- `language`: `yoruba` | `hausa` | `igbo` (default: `yoruba`)
+
+**Body:**
+- `file`: Audio file (webm/wav)
+
+**Response:**
+
+```json
+{
+  "transcription": "User's speech transcribed",
+  "correction": "Grammar feedback (if needed)",
+  "reply": "Tutor's response in target language",
+  "audio": "base64-encoded audio"
+}
+```
+
+## Performance Targets
+
+- **Total Latency**: < 4 seconds (Gemini + YarnGPT)
+- **Gemini Response**: ~1-2s
+- **YarnGPT TTS**: ~1-2s
+
+## License
+
+MIT
