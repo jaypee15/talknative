@@ -13,6 +13,8 @@ export default function App() {
   const [response, setResponse] = useState<ChatResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [audioPlaying, setAudioPlaying] = useState(false);
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
   const { status, startRecording, stopRecording, mediaBlobUrl, clearBlobUrl } = useReactMediaRecorder({ 
     audio: true 
@@ -43,8 +45,7 @@ export default function App() {
       setResponse(data);
 
       if (data.audio) {
-        const audio = new Audio(`data:audio/wav;base64,${data.audio}`);
-        audio.play();
+        playAudio(data.audio);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send audio');
@@ -53,10 +54,48 @@ export default function App() {
     }
   }
 
+  function playAudio(audioBase64: string) {
+    // Stop any currently playing audio
+    if (audioElement) {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+    }
+
+    const audio = new Audio(`data:audio/wav;base64,${audioBase64}`);
+    setAudioElement(audio);
+    setAudioPlaying(true);
+
+    audio.onended = () => {
+      setAudioPlaying(false);
+    };
+
+    audio.onerror = () => {
+      setAudioPlaying(false);
+      setError('Failed to play audio');
+    };
+
+    audio.play().catch((err) => {
+      setAudioPlaying(false);
+      setError('Audio playback failed: ' + err.message);
+    });
+  }
+
+  function replayAudio() {
+    if (response?.audio) {
+      playAudio(response.audio);
+    }
+  }
+
   function reset() {
+    if (audioElement) {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+    }
     clearBlobUrl();
     setResponse(null);
     setError(null);
+    setAudioPlaying(false);
+    setAudioElement(null);
   }
 
   return (
@@ -67,7 +106,7 @@ export default function App() {
       fontFamily: 'system-ui, -apple-system, sans-serif'
     }}>
       <h1 style={{ textAlign: 'center', marginBottom: '40px' }}>
-        Language Learning
+        TalkNative - Conversational Language Learning
       </h1>
 
       <div style={{ marginBottom: '30px' }}>
@@ -218,19 +257,63 @@ export default function App() {
           )}
 
           <div>
-            <strong>Tutor's reply:</strong>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
+              <strong>Tutor's reply:</strong>
+              {audioPlaying && (
+                <span style={{ 
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  gap: '5px',
+                  fontSize: '14px',
+                  color: '#2196F3',
+                  animation: 'pulse 1.5s ease-in-out infinite'
+                }}>
+                  🔊 Playing audio...
+                </span>
+              )}
+            </div>
             <p style={{ 
               background: 'white', 
               padding: '10px', 
               borderRadius: '6px',
-              margin: '5px 0 0 0',
+              margin: '5px 0 10px 0',
               fontSize: '18px'
             }}>
               {response.reply}
             </p>
+            <button
+              onClick={replayAudio}
+              disabled={audioPlaying}
+              style={{
+                padding: '10px 20px',
+                fontSize: '14px',
+                borderRadius: '6px',
+                border: 'none',
+                background: audioPlaying ? '#ccc' : '#2196F3',
+                color: 'white',
+                cursor: audioPlaying ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              🔊 {audioPlaying ? 'Playing...' : 'Replay Audio'}
+            </button>
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0.5;
+          }
+        }
+      `}</style>
     </div>
   );
 }
