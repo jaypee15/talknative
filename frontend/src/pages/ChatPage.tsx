@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useReactMediaRecorder } from 'react-media-recorder'
-import { sendTurn, TurnResponse } from '../lib/api'
+import { sendTurn } from '../lib/api'
 
 interface Turn {
   turn_number: number
