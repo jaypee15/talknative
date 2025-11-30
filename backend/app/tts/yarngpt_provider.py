@@ -4,7 +4,7 @@ from app.core.config import settings
 VOICE_MAP = {
     "yoruba": "idera",
     "hausa": "zainab",
-    "igbo": "amaka",
+    "igbo": "adaora",
 }
 
 async def synthesize_speech(text: str, language: str) -> bytes:

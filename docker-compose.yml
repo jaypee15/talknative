@@ -3,22 +3,27 @@ version: '3.8'
 services:
   backend:
     build: ./backend
-    env_file:
-      - .env
     ports:
       - "8080:8080"
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - YARNGPT_API_KEY=${YARNGPT_API_KEY}
-      - CORS_ALLOW_ORIGINS=["http://localhost:5173"]
+      - CORS_ALLOW_ORIGINS=${CORS_ALLOW_ORIGINS}
+      - TTS_PROVIDER=${TTS_PROVIDER}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - SUPABASE_BUCKET_NAME=${SUPABASE_BUCKET_NAME}
 
   frontend:
     build: ./frontend
     ports:
       - "5173:8080"
     environment:
-      - VITE_API_BASE_URL=http://localhost:8080
+      - VITE_API_BASE_URL=${API_BASE_URL}
+      - VITE_SUPABASE_URL=${SUPABASE_URL}
+      - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     depends_on:
       - backend
 

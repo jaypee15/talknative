@@ -1,14 +1,25 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime, func
+from sqlalchemy import Column, Integer, String, Text, ForeignKey
+from sqlalchemy.orm import relationship
 from app.db.base import Base
 
 class Turn(Base):
     __tablename__ = "turns"
 
-    id = Column(Integer, primary_key=True, index=True)
-    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
-    role = Column(String, nullable=False)
-    transcription = Column(Text)
-    reply_text_local = Column(Text)
-    reply_text_english = Column(Text)
-    correction_feedback = Column(Text)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False, index=True)
+    turn_number = Column(Integer, nullable=False)
+    
+    # User input
+    user_audio_url = Column(String, nullable=True)
+    user_transcription = Column(Text, nullable=False)
+    
+    # AI response
+    ai_response_text = Column(Text, nullable=False)
+    ai_response_audio_url = Column(String, nullable=True)
+    
+    # Grammar feedback
+    grammar_correction = Column(Text, nullable=True)
+    grammar_score = Column(Integer, nullable=True)  # 0-10 scale
+    
+    # Relationships
+    conversation = relationship("Conversation", back_populates="turns")
