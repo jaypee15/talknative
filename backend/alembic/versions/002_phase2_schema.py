@@ -15,8 +15,8 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Create users table
-    op.create_table('users',
+    # Create profiles table (not 'users' to avoid conflict with Supabase auth.users)
+    op.create_table('profiles',
         sa.Column('id', sa.String(), nullable=False),
         sa.Column('email', sa.String(), nullable=False),
         sa.Column('target_language', sa.Enum('yoruba', 'hausa', 'igbo', name='languageenum'), nullable=True),
@@ -24,8 +24,8 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
-    op.create_index(op.f('ix_users_email'), 'users', ['email'], unique=True)
+    op.create_index(op.f('ix_profiles_id'), 'profiles', ['id'], unique=False)
+    op.create_index(op.f('ix_profiles_email'), 'profiles', ['email'], unique=True)
     
     # Drop old conversations table and recreate with new schema
     op.drop_index('ix_conversations_id', table_name='conversations')
@@ -39,7 +39,7 @@ def upgrade() -> None:
         sa.Column('scenario_id', sa.String(), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
         sa.Column('active', sa.Boolean(), nullable=False, server_default='true'),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+        sa.ForeignKeyConstraint(['user_id'], ['profiles.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_conversations_id'), 'conversations', ['id'], unique=False)
@@ -75,9 +75,9 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_conversations_id'), table_name='conversations')
     op.drop_table('conversations')
     
-    op.drop_index(op.f('ix_users_email'), table_name='users')
-    op.drop_index(op.f('ix_users_id'), table_name='users')
-    op.drop_table('users')
+    op.drop_index(op.f('ix_profiles_email'), table_name='profiles')
+    op.drop_index(op.f('ix_profiles_id'), table_name='profiles')
+    op.drop_table('profiles')
     
     # Recreate old schema (simplified version)
     op.create_table('conversations',

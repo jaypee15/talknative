@@ -12,8 +12,8 @@ class ProficiencyEnum(str, enum.Enum):
     intermediate = "intermediate"
     advanced = "advanced"
 
-class User(Base):
-    __tablename__ = "users"
+class Profile(Base):
+    __tablename__ = "profiles"
 
     id = Column(String, primary_key=True, index=True)  # Supabase Auth UUID
     email = Column(String, unique=True, index=True, nullable=False)

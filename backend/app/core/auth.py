@@ -4,13 +4,13 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.session import get_db
-from app.models.user import User
+from app.models.user import Profile
 
 security = HTTPBearer()
 
 class CurrentUser:
     """Current authenticated user context."""
-    def __init__(self, user: User):
+    def __init__(self, user: Profile):
         self.user = user
         self.id = user.id
         self.email = user.email
@@ -48,11 +48,11 @@ async def get_current_user(
             )
         
         # Get or create user in our database
-        user = db.query(User).filter(User.id == user_id).first()
+        user = db.query(Profile).filter(Profile.id == user_id).first()
         
         if not user:
             # Create user if doesn't exist (first login)
-            user = User(id=user_id, email=email)
+            user = Profile(id=user_id, email=email)
             db.add(user)
             db.commit()
             db.refresh(user)

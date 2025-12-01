@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.auth import get_current_user, CurrentUser
 from app.db.session import get_db
-from app.models.user import User
+from app.models.user import Profile
 from app.models.schemas import UserProfileUpdate, UserProfileResponse
 
 router = APIRouter(tags=["users"])
@@ -17,7 +17,7 @@ async def update_user_profile(
     Update user profile with target language and proficiency level.
     Called during onboarding.
     """
-    user = db.query(User).filter(User.id == current_user.id).first()
+    user = db.query(Profile).filter(Profile.id == current_user.id).first()
     
     if not user:
         raise HTTPException(
@@ -40,7 +40,7 @@ async def get_user_profile(
     db: Session = Depends(get_db)
 ):
     """Get current user's profile."""
-    user = db.query(User).filter(User.id == current_user.id).first()
+    user = db.query(Profile).filter(Profile.id == current_user.id).first()
     
     if not user:
         raise HTTPException(
