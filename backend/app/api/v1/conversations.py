@@ -1,6 +1,7 @@
 import uuid
 import base64
 import logging
+from app.core.logging import get_logger
 import time
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -8,6 +9,7 @@ from sqlalchemy import desc
 from typing import Optional, List
 from pydantic_ai import BinaryContent
 from pydantic_ai.exceptions import ModelHTTPError
+from types import SimpleNamespace
 
 from app.core.auth import get_current_user, CurrentUser
 from app.core.storage import storage_manager
@@ -19,8 +21,10 @@ from app.models.schemas import ConversationStartRequest, ConversationStartRespon
 from app.ai.agent import get_agent
 from app.ai.prompt_builder import build_system_prompt
 from app.tts import synthesize_speech
+from app.core.config import settings
 
 router = APIRouter(tags=["conversations"])
+logger = get_logger(__name__)
 
 async def process_turn_persistence(
     db: Session,
@@ -36,21 +40,36 @@ async def process_turn_persistence(
     """
     try:
         # 1. Upload User Audio
+        # Attempt to detect content type; default to webm for browser recordings
+        def _detect_ct(b: bytes) -> str:
+            try:
+                if b[:4] == b"RIFF" and b[8:12] == b"WAVE":
+                    return "audio/wav"
+                if b[:3] == b"ID3" or (len(b) > 1 and b[0] == 0xFF):
+                    return "audio/mpeg"
+            except Exception:
+                pass
+            return "audio/webm"
+
+        user_ct = _detect_ct(user_audio_bytes)
         user_audio_url = await storage_manager.upload_audio(
             audio_data=user_audio_bytes,
             user_id=user_id,
             conversation_id=conversation_id,
             turn_number=turn_number,
-            file_type="user"
+            file_type="user",
+            content_type=user_ct,
         )
         
         # 2. Upload AI Audio
+        ai_ct = _detect_ct(ai_audio_bytes)
         ai_audio_url = await storage_manager.upload_audio(
             audio_data=ai_audio_bytes,
             user_id=user_id,
             conversation_id=conversation_id,
             turn_number=turn_number,
-            file_type="ai"
+            file_type="ai",
+            content_type=ai_ct,
         )
 
         # 3. Calculate Scores
@@ -75,10 +94,10 @@ async def process_turn_persistence(
         
         db.add(turn)
         db.commit()
-        logging.getLogger(__name__).info("Background task complete for Turn %s", turn_number)
+        logger.info("Background task complete for Turn %s", turn_number)
         
     except Exception as e:
-        logging.getLogger(__name__).exception("Background Persistence Error: %s", e)
+        logger.exception("Background Persistence Error: %s", e)
         
 
 @router.post("/start", response_model=ConversationStartResponse)
@@ -192,32 +211,60 @@ async def create_turn(
         scenario_data=scenario  # Pass full scenario for mission-based prompts
     )
     
-    agent = get_agent(current_user.target_language, 'google-gla:gemini-2.5-flash-lite')
-    
-    try:
-        result = await agent.run(
-            [system_prompt] + message_history + [
-                f"The user is speaking {current_user.target_language}.",
-                BinaryContent(data=audio_bytes, media_type=mime_type)
-            ]
-        )
-    except ModelHTTPError as e:
-        if e.status_code == 503:
-            logging.getLogger(__name__).warning("Fallback to non-lite model due to 503")
-            fallback_agent = get_agent(
-                current_user.target_language,
-                model_name="google-gla:gemini-2.5-flash",
-            )
-            result = await fallback_agent.run(
+    candidate_models = [
+        'google-gla:gemini-2.5-flash-lite',
+        'google-gla:gemini-2.5-flash',
+        'google-gla:gemini-2.0-flash',
+    ]
+    result = None
+    last_err = None
+    for m in candidate_models:
+        logger.info("Attempting AI model: %s", m)
+        agent = get_agent(current_user.target_language, m)
+        try:
+            result = await agent.run(
                 [system_prompt] + message_history + [
                     f"The user is speaking {current_user.target_language}.",
                     BinaryContent(data=audio_bytes, media_type=mime_type)
                 ]
             )
-        else:
-            raise
-    data = result.output
-    t_ai_end = time.time()
+            break
+        except ModelHTTPError as e:
+            last_err = e
+            if e.status_code == 503:
+                logger.warning("Model %s overloaded (503). Trying next fallback...", m)
+                continue
+            else:
+                logger.exception("Model %s error: %s", m, e)
+                raise
+        except Exception as e:
+            last_err = e
+            logger.exception("Model %s unexpected error: %s", m, e)
+            continue
+    used_local_fallback = False
+    if result is None:
+        logger.error("All AI models overloaded. Using local fallback response.")
+        fallback_text_local = {
+            'yoruba': "Ẹ jọ̀ọ́, iṣẹ́ pọ̀ ju báyìí. Jọ̀wọ́ gbìmọ̀ lẹ́ẹ̀kan síi.",
+            'hausa': "Don Allah, jira kaɗan. Samfuri ya cunkushe. Gwada sake daga baya.",
+            'igbo': "Biko, chere ntakịrị. Usoro juru. Biko nwalee ọzọ.",
+        }.get(current_user.target_language, "Service busy. Please try again.")
+        data = SimpleNamespace(
+            user_transcription="",
+            grammar_is_correct=False,
+            correction_feedback=None,
+            reply_text_local=fallback_text_local,
+            reply_text_english="Service busy. Please try again soon.",
+            sentiment_score=-0.2,
+            current_price=None,
+            cultural_flag=False,
+            cultural_feedback=None,
+        )
+        used_local_fallback = True
+        t_ai_end = time.time()
+    else:
+        data = result.output
+        t_ai_end = time.time()
     
     # Run TTS (The second necessary bottleneck)
     t_tts_start = time.time()
@@ -229,8 +276,19 @@ async def create_turn(
     
     # Prepare response
     # Convert audio to Data URI for immediate playback on frontend
-    b64_audio = base64.b64encode(ai_audio_bytes).decode('utf-8')
-    audio_data_uri = f"data:audio/mpeg;base64,{b64_audio}"
+    audio_provider = settings.TTS_PROVIDER
+    audio_available = bool(ai_audio_bytes) and len(ai_audio_bytes) > 0
+    audio_error = None
+    if audio_available:
+        ct = "audio/wav" if settings.TTS_PROVIDER == "yarngpt" else "audio/mpeg"
+        b64_audio = base64.b64encode(ai_audio_bytes).decode('utf-8')
+        audio_data_uri = f"data:{ct};base64,{b64_audio}"
+    else:
+        logger.warning("TTS returned empty audio bytes")
+        audio_error = "tts_failed" + ("|model_overloaded" if used_local_fallback else "")
+        if audio_provider == "yarngpt":
+            audio_error += "|timeout"
+        audio_data_uri = ""
     
     next_turn_number = len(previous_turns) + 1
     
@@ -246,6 +304,12 @@ async def create_turn(
         data
     )
     t_total = time.time() - t_start
+
+    logger.info(f"⏱️ TURN PERFORMANCE BREAKDOWN (Total: {t_total:.2f}s)")
+    logger.info(f"   🎤 Audio Read: {t_read_end - t_read_start:.2f}s | Size: {len(audio_bytes)/1024:.1f}KB")
+    logger.info(f"   📜 DB History: {t_hist_end - t_hist_start:.2f}s")
+    logger.info(f"   🤖 Gemini AI:  {t_ai_end - t_ai_start:.2f}s")
+    logger.info(f"   🗣️ TTS Gen:    {t_tts_end - t_tts_start:.2f}s")
     
     return TurnResponse(
         turn_number=next_turn_number,
@@ -253,10 +317,15 @@ async def create_turn(
         ai_text=data.reply_text_local,
         ai_text_english=data.reply_text_english,
         ai_audio_url=audio_data_uri, # Frontend plays this instantly
+        audio_available=audio_available,
+        audio_provider=audio_provider,
+        audio_error=audio_error,
         correction=data.correction_feedback,
         grammar_score=10 if data.grammar_is_correct else 5,
         sentiment_score=data.sentiment_score,
-        negotiated_price=data.current_price
+        negotiated_price=data.current_price,
+        cultural_flag=data.cultural_flag,
+        cultural_feedback=data.cultural_feedback
     )
 
 @router.get("/history", response_model=List[ConversationHistoryResponse])
@@ -337,6 +406,10 @@ async def get_conversation_turns(
             ai_text_english=t.ai_response_text_english,
             ai_audio_url=t.ai_response_audio_url or "",
             correction=t.grammar_correction,
-            grammar_score=t.grammar_score
+            grammar_score=t.grammar_score,
+            sentiment_score=t.sentiment_score,
+            negotiated_price=t.negotiated_price,
+            cultural_flag=t.cultural_flag,
+            cultural_feedback=t.cultural_feedback
         ) for t in turns
     ]

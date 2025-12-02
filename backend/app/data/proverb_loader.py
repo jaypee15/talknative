@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from typing import List, Optional, Dict
 from functools import lru_cache
-import logging
+from app.core.logging import get_logger
 
 PROVERBS_FILE = Path(__file__).parent / "proverbs.json"
 
@@ -13,7 +13,7 @@ class ProverbLoader:
     
     def _load_proverbs(self):
         if not PROVERBS_FILE.exists():
-            logging.getLogger(__name__).warning("%s not found", PROVERBS_FILE)
+            logger.warning("%s not found", PROVERBS_FILE)
             return
         
         with open(PROVERBS_FILE, 'r', encoding='utf-8') as f:
@@ -33,3 +33,5 @@ class ProverbLoader:
 @lru_cache()
 def get_proverb_loader() -> ProverbLoader:
     return ProverbLoader()
+
+logger = get_logger(__name__)

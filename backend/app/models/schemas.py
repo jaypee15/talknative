@@ -69,10 +69,15 @@ class TurnResponse(BaseModel):
     ai_text: str
     ai_text_english: Optional[str]
     ai_audio_url: str
+    audio_available: Optional[bool] = None
+    audio_provider: Optional[str] = None
+    audio_error: Optional[str] = None
     correction: Optional[str]
     grammar_score: Optional[int]
     sentiment_score: Optional[float] = None
     negotiated_price: Optional[int] = None
+    cultural_flag: Optional[bool] = None
+    cultural_feedback: Optional[str] = None
 
 # Conversation history schemas
 class ConversationHistoryResponse(BaseModel):

@@ -13,6 +13,9 @@ interface Turn {
   ai_text: string
   ai_text_english: string | null
   ai_audio_url: string
+  audio_available?: boolean | null
+  audio_provider?: string | null
+  audio_error?: string | null
   correction: string | null
   grammar_score: number | null
   user_audio_url?: string
@@ -54,7 +57,11 @@ export default function ChatPage() {
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
 
   const { status, startRecording, stopRecording, mediaBlobUrl, clearBlobUrl } = useReactMediaRecorder({ 
-    audio: true 
+    audio: true,
+    mediaRecorderOptions: {
+      mimeType: 'audio/webm;codecs=opus',
+      audioBitsPerSecond: 32000,
+    }
   })
 
   // 1. Load conversation history and scenario on mount
@@ -136,9 +143,9 @@ export default function ChatPage() {
       setCurrentPrice(response.negotiated_price)
 
     if (response.cultural_flag) {
-        setCulturalFeedback(response.cultural_feedback) // Triggers Alert
+        setCulturalFeedback(response.cultural_feedback || "You broke a cultural rule!")
         // Optional: Damage patience heavily
-        setPatience(prev => Math.max(0, prev - 30))
+        setPatience(prev => Math.max(0, prev - 25))
     }
       
       // Check Win Condition
@@ -408,13 +415,24 @@ export default function ChatPage() {
                     </div>
                     <p className="text-sm text-gray-900 leading-relaxed">{turn.ai_text}</p>
                     <div className="mt-3 flex items-center gap-2 flex-wrap border-t border-gray-100 pt-2">
-                      <button
-                        onClick={() => playAudio(turn.ai_audio_url, turn.turn_number)}
-                        disabled={audioPlaying && playingTurnNumber === turn.turn_number}
-                        className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-                      >
-                        {audioPlaying && playingTurnNumber === turn.turn_number ? '⏸ Playing...' : '🔊 Replay'}
-                      </button>
+                      {turn.ai_audio_url && (
+                        <button
+                          onClick={() => playAudio(turn.ai_audio_url, turn.turn_number)}
+                          disabled={audioPlaying && playingTurnNumber === turn.turn_number}
+                          className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+                        >
+                          {audioPlaying && playingTurnNumber === turn.turn_number ? '⏸ Playing...' : '🔊 Replay'}
+                        </button>
+                      )}
+                      {!turn.ai_audio_url && turn.audio_error && (
+                        <span className="text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-full font-medium">
+                          {turn.audio_error.includes('timeout')
+                            ? 'Audio timed out'
+                            : turn.audio_error.includes('model_overloaded')
+                              ? 'Service busy'
+                              : 'Audio unavailable'}
+                        </span>
+                      )}
                       <button
                         onClick={() => toggleTranslation(turn.turn_number)}
                         className="text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-full hover:bg-gray-100 font-medium transition-colors"

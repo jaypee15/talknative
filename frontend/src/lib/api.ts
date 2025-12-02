@@ -83,10 +83,15 @@ export interface TurnResponse {
   ai_text: string
   ai_text_english: string | null
   ai_audio_url: string
+  audio_available?: boolean | null
+  audio_provider?: string | null
+  audio_error?: string | null
   correction: string | null
   grammar_score: number | null
   sentiment_score: number | null
   negotiated_price: number | null
+  cultural_flag?: boolean
+  cultural_feedback?: string | null
 }
 
 export interface ConversationHistory {

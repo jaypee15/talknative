@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float, Boolean
 from sqlalchemy.orm import relationship
 from app.db.base import Base
 
@@ -25,6 +25,8 @@ class Turn(Base):
     
     sentiment_score = Column(Float, nullable=True)
     negotiated_price = Column(Integer, nullable=True)
+    cultural_flag = Column(Boolean, default=False)
+    cultural_feedback = Column(Text, nullable=True)
     
     # Relationships
     conversation = relationship("Conversation", back_populates="turns")

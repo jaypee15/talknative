@@ -1,5 +1,5 @@
 from pydantic_ai import Agent
-import logging
+from app.core.logging import get_logger
 
 VOICE_MAP = {
     "yoruba": "Kainene",
@@ -32,5 +32,7 @@ async def synthesize_speech(text: str, language: str) -> bytes:
             return result.audio_data
         return b""
     except Exception as e:
-        logging.getLogger(__name__).exception("Gemini TTS error: %s", e)
+        logger.exception("Gemini TTS error: %s", e)
         return b""
+ 
+logger = get_logger(__name__)
