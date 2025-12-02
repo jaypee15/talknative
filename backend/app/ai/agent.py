@@ -12,7 +12,7 @@ class ConversationTurn(BaseModel):
     current_price: int | None = Field(description="For market scenarios only: the current price offered by the seller. If not a market scenario return null.")
     reply_text_local: str = Field(description="The response. if cultural_flag is True, this hsould be an angry/shocked reaction.")
     cultural_flag: bool = Field(description="Set to True if user was culturally rude (e.g. greeting elder casually, refusing food rudely).")
-    cultral_feedback: str | None = Field(description="If flag is True, explain the cultural mistake (e.g 'You must kneel for elders'). ")
+    cultural_feedback: str | None = Field(description="If flag is True, explain the cultural mistake (e.g 'You must kneel for elders'). ")
 
 SYSTEM_PROMPTS = {
     "yoruba": (

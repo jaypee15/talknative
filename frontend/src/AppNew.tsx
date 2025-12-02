@@ -1,14 +1,10 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import OnboardingPage from './pages/OnboardingPage'
-import DashboardPage from './pages/DashboardPage'
 import ChatPage from './pages/ChatPage'
 import RequireAuth from './components/RequireAuth'
 import MapDashboard from './pages/MapDashboard'
 import WisdomDeckPage from './pages/WisdomDeckPage'
-
-// Keep the old App as LegacyChat for backward compatibility
-import LegacyChat from './LegacyChat'
 
 export default function App() {
   return (
@@ -34,12 +30,12 @@ export default function App() {
         }
       />
       <Route
-      path='=/wisdom'
-      element={
-        <RequireAuth>
-          <WisdomDeckPage />
-        </RequireAuth>
-      }
+        path="/wisdom"
+        element={
+          <RequireAuth>
+            <WisdomDeckPage />
+          </RequireAuth>
+        }
       />
       <Route
         path="/chat/:id"
@@ -49,9 +45,6 @@ export default function App() {
           </RequireAuth>
         }
       />
-      
-      {/* Legacy POC route - keep for testing */}
-      <Route path="/legacy" element={<LegacyChat />} />
       
       {/* Default redirect */}
       <Route path="/" element={<Navigate to="/login" replace />} />

@@ -51,7 +51,7 @@ class ScenarioResponse(BaseModel):
     mission: Optional[ScenarioMission] = None
     key_vocabulary: Optional[list[KeyVocabulary]] = None
     system_prompt_context: Optional[str] = None
-    haggles_settings: Optional[HaggleSettings] = None
+    haggle_settings: Optional[HaggleSettings] = None
 
 # Conversation schemas
 class ConversationStartRequest(BaseModel):

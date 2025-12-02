@@ -5,9 +5,6 @@ import DashboardPage from './pages/DashboardPage'
 import ChatPage from './pages/ChatPage'
 import RequireAuth from './components/RequireAuth'
 
-// Keep the old App as LegacyChat for backward compatibility
-import LegacyChat from './LegacyChat'
-
 export default function App() {
   return (
     <Routes>
@@ -39,9 +36,6 @@ export default function App() {
           </RequireAuth>
         }
       />
-      
-      {/* Legacy POC route - keep for testing */}
-      <Route path="/legacy" element={<LegacyChat />} />
       
       {/* Default redirect */}
       <Route path="/" element={<Navigate to="/login" replace />} />
