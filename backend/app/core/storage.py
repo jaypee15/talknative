@@ -1,6 +1,7 @@
 """Supabase Storage helper for audio uploads."""
 
 import os
+import logging
 from typing import Optional
 from app.core.supabase_client import supabase
 from app.core.config import settings
@@ -33,7 +34,7 @@ class StorageManager:
         conversation_id: str,
         turn_number: int,
         file_type: str  # 'user' or 'ai'
-    ) -> Optional[str]:
+        ) -> Optional[str]:
         """
         Upload audio to Supabase Storage and return public URL.
         
@@ -56,7 +57,7 @@ class StorageManager:
             return public_url
             
         except Exception as e:
-            print(f"Error uploading audio to Supabase Storage: {e}")
+            logging.getLogger(__name__).exception("Error uploading audio to Supabase Storage: %s", e)
             return None
     
     async def delete_audio(
@@ -72,7 +73,7 @@ class StorageManager:
             supabase.storage.from_(self.bucket_name).remove([object_key])
             return True
         except Exception as e:
-            print(f"Error deleting audio: {e}")
+            logging.getLogger(__name__).exception("Error deleting audio: %s", e)
             return False
 
 # Singleton instance

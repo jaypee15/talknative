@@ -1,5 +1,7 @@
 import uuid
 import base64
+import logging
+import time
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
@@ -73,10 +75,10 @@ async def process_turn_persistence(
         
         db.add(turn)
         db.commit()
-        print(f"✅ Background task complete for Turn {turn_number}")
+        logging.getLogger(__name__).info("Background task complete for Turn %s", turn_number)
         
     except Exception as e:
-        print(f"❌ Background Persistence Error: {e}")
+        logging.getLogger(__name__).exception("Background Persistence Error: %s", e)
         
 
 @router.post("/start", response_model=ConversationStartResponse)
@@ -144,6 +146,7 @@ async def create_turn(
     Process a new turn in an existing conversation.
     Accepts user audio, processes with AI, generates TTS, and stores everything.
     """
+    t_start = time.time()
     # Verify conversation exists and belongs to user
     conversation = db.query(Conversation).filter(
         Conversation.id == conversation_id,
@@ -161,10 +164,13 @@ async def create_turn(
     scenario = loader.get_scenario(conversation.scenario_id)
     
     # Read audio file
+    t_read_start = time.time()
     audio_bytes = await file.read()
     mime_type = file.content_type or "audio/webm"
+    t_read_end = time.time()
     
     # Get conversation history (last 6 turns)
+    t_hist_start =time.time()
     previous_turns = db.query(Turn).filter(
         Turn.conversation_id == conversation_id
     ).order_by(desc(Turn.turn_number)).limit(6).all()
@@ -175,8 +181,10 @@ async def create_turn(
     for turn in previous_turns:
         message_history.append(f"User: {turn.user_transcription}")
         message_history.append(f"Assistant: {turn.ai_response_text}")
+    t_hist_end = time.time()
     
     # Build dynamic system prompt with full scenario data
+    t_ai_start = time.time()
     system_prompt = build_system_prompt(
         language=current_user.target_language,
         scenario_prompt=scenario.get('system_prompt_context', scenario.get('system_prompt', '')),
@@ -195,7 +203,7 @@ async def create_turn(
         )
     except ModelHTTPError as e:
         if e.status_code == 503:
-            print("fallback")
+            logging.getLogger(__name__).warning("Fallback to non-lite model due to 503")
             fallback_agent = get_agent(
                 current_user.target_language,
                 model_name="google-gla:gemini-2.5-flash",
@@ -209,23 +217,24 @@ async def create_turn(
         else:
             raise
     data = result.output
+    t_ai_end = time.time()
     
     # Run TTS (The second necessary bottleneck)
+    t_tts_start = time.time()
     ai_audio_bytes = await synthesize_speech(
         text=data.reply_text_local,
         language=current_user.target_language
     )
+    t_tts_end = time.time()
     
-    # 6. RETURN IMMEDIATELY (Skip Storage)
-    
+    # Prepare response
     # Convert audio to Data URI for immediate playback on frontend
-    # This avoids the frontend needing to download from Supabase
     b64_audio = base64.b64encode(ai_audio_bytes).decode('utf-8')
     audio_data_uri = f"data:audio/mpeg;base64,{b64_audio}"
     
     next_turn_number = len(previous_turns) + 1
     
-    # 7. Offload Storage to Background
+    #  Offload Storage to Background
     background_tasks.add_task(
         process_turn_persistence,
         db, # NOTE: FastAPI manages this session, might need a fresh one if high concurrency
@@ -236,6 +245,7 @@ async def create_turn(
         ai_audio_bytes,
         data
     )
+    t_total = time.time() - t_start
     
     return TurnResponse(
         turn_number=next_turn_number,

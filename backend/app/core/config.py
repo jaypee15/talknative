@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     YARNGPT_API_KEY: str
     DATABASE_URL: str
     CORS_ALLOW_ORIGINS: list[str] = ["*"]
+    LOG_LEVEL: str = "INFO"
     
     TTS_PROVIDER: Literal["yarngpt", "gemini"] = "yarngpt"
     

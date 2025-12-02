@@ -6,6 +6,7 @@ import os
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+import logging
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -16,12 +17,15 @@ from app.core.config import settings
 from app.core.supabase_client import supabase
 from app.models.conversation import Conversation
 from app.models.turn import Turn
+from app.core.logging import configure_logging, get_logger
 
 
 def cleanup_old_audio():
     """
     Clean up audio files older than 30 days.
     """
+    configure_logging()
+    logger = get_logger(__name__)
     # Create database session
     engine = create_engine(settings.DATABASE_URL.replace("postgresql://", "postgresql+psycopg://"))
     SessionLocal = sessionmaker(bind=engine)
@@ -30,15 +34,14 @@ def cleanup_old_audio():
     try:
         # Calculate cutoff date (30 days ago)
         cutoff_date = datetime.now() - timedelta(days=30)
-        
-        print(f"Cleaning up audio files older than {cutoff_date.isoformat()}")
+        logger.info("Cleaning up audio files older than %s", cutoff_date.isoformat())
         
         # Find old conversations
         old_conversations = db.query(Conversation).filter(
             Conversation.created_at < cutoff_date
         ).all()
         
-        print(f"Found {len(old_conversations)} conversations older than 30 days")
+        logger.info("Found %s conversations older than 30 days", len(old_conversations))
         
         total_files_deleted = 0
         total_turns_updated = 0
@@ -67,9 +70,9 @@ def cleanup_old_audio():
                     try:
                         supabase.storage.from_(settings.SUPABASE_BUCKET_NAME).remove([file_path])
                         total_files_deleted += 1
-                        print(f"Deleted: {file_path}")
+                        logger.info("Deleted: %s", file_path)
                     except Exception as e:
-                        print(f"Error deleting {file_path}: {str(e)}")
+                        logger.exception("Error deleting %s: %s", file_path, str(e))
                 
                 # Update database to NULL audio URLs
                 if turn.user_audio_url or turn.ai_response_audio_url:
@@ -80,13 +83,13 @@ def cleanup_old_audio():
         # Commit database changes
         db.commit()
         
-        print(f"\nCleanup complete:")
-        print(f"- Files deleted: {total_files_deleted}")
-        print(f"- Turns updated: {total_turns_updated}")
-        print(f"- Conversations processed: {len(old_conversations)}")
+        logger.info("Cleanup complete:")
+        logger.info("- Files deleted: %s", total_files_deleted)
+        logger.info("- Turns updated: %s", total_turns_updated)
+        logger.info("- Conversations processed: %s", len(old_conversations))
         
     except Exception as e:
-        print(f"Error during cleanup: {str(e)}")
+        logger.exception("Error during cleanup: %s", str(e))
         db.rollback()
         raise
     finally:

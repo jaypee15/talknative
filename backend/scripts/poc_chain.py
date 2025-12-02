@@ -4,6 +4,7 @@ import os
 import sys
 from pathlib import Path
 import httpx
+from app.core.logging import configure_logging, get_logger
 
 # Add parent directory to path to import from app
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -12,19 +13,21 @@ from pydantic_ai import BinaryContent
 from app.ai.agent import get_agent
 
 async def test_chain(audio_file_path: str, language: str = "igbo"):
-    print(f"Starting POC chain test with {audio_file_path}")
-    print(f"Language: {language}")
+    configure_logging()
+    logger = get_logger(__name__)
+    logger.info("Starting POC chain test with %s", audio_file_path)
+    logger.info("Language: %s", language)
     
     start_total = time.time()
     
     with open(audio_file_path, "rb") as f:
         audio_bytes = f.read()
     
-    print(f"Audio file loaded: {len(audio_bytes)} bytes")
+    logger.info("Audio file loaded: %s bytes", len(audio_bytes))
     
     # Get language-specific agent
     agent = get_agent(language)
-    print(f"Using language-specific agent for {language}")
+    logger.info("Using language-specific agent for %s", language)
     
     start_gemini = time.time()
     # Create BinaryContent for audio
@@ -37,12 +40,12 @@ async def test_chain(audio_file_path: str, language: str = "igbo"):
     gemini_time = time.time() - start_gemini
     
     data = result.output
-    print(f"\nGemini Response ({gemini_time:.2f}s):")
-    print(f"  Transcription: {data.user_transcription}")
-    print(f"  Grammar Correct: {data.grammar_is_correct}")
-    print(f"  Correction: {data.correction_feedback}")
-    print(f"  Reply (Local): {data.reply_text_local}")
-    print(f"  Reply (English): {data.reply_text_english}")
+    logger.info("Gemini Response (%.2fs):", gemini_time)
+    logger.info("Transcription: %s", data.user_transcription)
+    logger.info("Grammar Correct: %s", data.grammar_is_correct)
+    logger.info("Correction: %s", data.correction_feedback)
+    logger.info("Reply (Local): %s", data.reply_text_local)
+    logger.info("Reply (English): %s", data.reply_text_english)
     
     start_tts = time.time()
     yarngpt_key = os.getenv("YARNGPT_API_KEY", "YOUR_YARNGPT_API_KEY")
@@ -58,21 +61,22 @@ async def test_chain(audio_file_path: str, language: str = "igbo"):
     
     output_file = Path("output_audio.wav")
     output_file.write_bytes(audio_output)
-    print(f"\nYarnGPT TTS ({tts_time:.2f}s):")
-    print(f"  Audio saved to: {output_file}")
+    logger.info("YarnGPT TTS (%.2fs):", tts_time)
+    logger.info("Audio saved to: %s", output_file)
     
     total_time = time.time() - start_total
-    print(f"\nTotal latency: {total_time:.2f}s")
+    logger.info("Total latency: %.2fs", total_time)
     
     if total_time > 4:
-        print("⚠️  Warning: Latency exceeds 4s target")
+        logger.warning("Warning: Latency exceeds 4s target")
     else:
-        print("✓ Latency within 4s target")
+        logger.info("Latency within 4s target")
 
 if __name__ == "__main__":
     import sys
     if len(sys.argv) < 2:
-        print("Usage: python poc_chain.py <audio_file_path> [language]")
+        configure_logging()
+        get_logger(__name__).error("Usage: python poc_chain.py <audio_file_path> [language]")
         sys.exit(1)
     
     audio_path = sys.argv[1]

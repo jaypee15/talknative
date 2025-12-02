@@ -8,12 +8,15 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from app.db.base import SessionLocal
 from app.models.gamification import Proverb
 from sqlalchemy.exc import IntegrityError
+from app.core.logging import configure_logging, get_logger
 
 DATA_DIR = Path(__file__).parent.parent / "app" / "data"
 
 def seed_proverbs():
+    configure_logging()
+    logger = get_logger(__name__)
     db = SessionLocal()
-    print("🌱 Seeding Proverbs...")
+    logger.info("Seeding Proverbs...")
     
     try:
         with open(DATA_DIR / "proverbs.json", "r") as f:
@@ -29,12 +32,12 @@ def seed_proverbs():
                 count += 1
         
         db.commit()
-        print(f"✅ Added {count} new proverbs.")
+        logger.info("Added %s new proverbs.", count)
         
     except FileNotFoundError:
-        print("❌ proverbs.json not found!")
+        logger.error("proverbs.json not found!")
     except Exception as e:
-        print(f"❌ Error: {e}")
+        logger.exception("Error: %s", e)
     finally:
         db.close()
 

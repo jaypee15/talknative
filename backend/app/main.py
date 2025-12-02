@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.core.logging import configure_logging
 from app.api.v1.chat import router as chat_router
 from app.api.v1.users import router as users_router
 from app.api.v1.scenarios import router as scenarios_router
@@ -8,6 +9,7 @@ from app.api.v1.conversations import router as conversations_router
 from app.api.v1.vocabulary import router as vocabulary_router
 from app.api.v1.game import router as game_router
 
+configure_logging(settings.LOG_LEVEL)
 app = FastAPI(title="TalkNative API", version="2.0")
 
 app.add_middleware(
