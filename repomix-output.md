@@ -56,7 +56,7 @@ backend/
       v1/
         chat.py
         conversations.py
-        gamep.py
+        game.py
         scenarios.py
         users.py
         vocabulary.py
@@ -66,6 +66,7 @@ backend/
       storage.py
       supabase_client.py
     data/
+      proverb_loader.py
       proverbs.json
       scenario_loader.py
       scenarios.json
@@ -74,6 +75,7 @@ backend/
       session.py
     models/
       conversation.py
+      gamification.py
       saved_word.py
       schemas.py
       turn.py
@@ -87,6 +89,7 @@ backend/
   scripts/
     cleanup_old_audio.py
     poc_chain.py
+    seed_db.py
   .env.example
   .gitignore
   alembic.ini
@@ -100,6 +103,7 @@ frontend/
       CulturalAlert.tsx
       HaggleTicker.tsx
       PatienceMeter.tsx
+      ProverbCard.tsx
       RequireAuth.tsx
       ScenarioModal.tsx
     contexts/
@@ -113,10 +117,10 @@ frontend/
       LoginPage.tsx
       MapDashboard.tsx
       OnboardingPage.tsx
+      WisdomDeckPage.tsx
     App.tsx
     AppNew.tsx
     index.css
-    LegacyChat.tsx
     main.tsx
     vite-env.d.ts
   .gitignore
@@ -140,6 +144,110 @@ START_HERE.md
 ```
 
 # Files
+
+## File: frontend/src/components/ProverbCard.tsx
+````typescript
+interface Proverb {
+    content: string
+    literal_translation: string
+    meaning: string
+    rarity: 'common' | 'rare' | 'legendary'
+  }
+  
+  export default function ProverbCard({ proverb, onClose }: { proverb: Proverb, onClose: () => void }) {
+    const getColors = () => {
+      if (proverb.rarity === 'legendary') return 'from-yellow-400 to-yellow-600 border-yellow-200'
+      if (proverb.rarity === 'rare') return 'from-purple-400 to-purple-600 border-purple-200'
+      return 'from-gray-100 to-gray-300 border-gray-400 text-gray-800'
+    }
+  
+    return (
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4">
+        <div className={`w-full max-w-sm bg-gradient-to-br ${getColors()} p-1 rounded-2xl shadow-2xl transform transition-all animate-card-reveal`}>
+          <div className="bg-white/95 rounded-xl p-6 h-full text-center relative overflow-hidden">
+            {/* Rarity Badge */}
+            <div className="absolute top-4 right-4 text-xs font-bold uppercase tracking-widest opacity-50">
+              {proverb.rarity}
+            </div>
+  
+            <div className="mb-6 mt-4">
+              <h2 className="text-3xl font-bold mb-4 font-serif text-gray-900">{proverb.content}</h2>
+              <p className="text-sm text-gray-500 italic mb-6">"{proverb.literal_translation}"</p>
+            </div>
+  
+            <div className="bg-black/5 p-4 rounded-lg mb-6">
+              <p className="text-xs uppercase font-bold text-gray-500 mb-1">Deep Meaning</p>
+              <p className="text-gray-800 font-medium">{proverb.meaning}</p>
+            </div>
+  
+            <button 
+              onClick={onClose}
+              className="w-full bg-black text-white py-3 rounded-lg font-bold hover:bg-gray-900 transition"
+            >
+              Collect Wisdom
+            </button>
+          </div>
+        </div>
+        <style>{`
+          @keyframes card-reveal {
+            0% { opacity: 0; transform: translateY(50px) rotateY(90deg); }
+            100% { opacity: 1; transform: translateY(0) rotateY(0); }
+          }
+          .animate-card-reveal { animation: card-reveal 0.8s ease-out; }
+        `}</style>
+      </div>
+    )
+  }
+````
+
+## File: backend/alembic/versions/001_initial_migration.py
+````python
+"""Initial migration
+
+Revision ID: 001
+Revises: 
+Create Date: 2025-11-29
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+revision = '001'
+down_revision = None
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    op.create_table('conversations',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('language', sa.String(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_conversations_id'), 'conversations', ['id'], unique=False)
+    
+    op.create_table('turns',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('conversation_id', sa.Integer(), nullable=False),
+    sa.Column('role', sa.String(), nullable=False),
+    sa.Column('transcription', sa.Text(), nullable=True),
+    sa.Column('reply_text_local', sa.Text(), nullable=True),
+    sa.Column('reply_text_english', sa.Text(), nullable=True),
+    sa.Column('correction_feedback', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+    sa.ForeignKeyConstraint(['conversation_id'], ['conversations.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_turns_id'), 'turns', ['id'], unique=False)
+
+
+def downgrade() -> None:
+    op.drop_index(op.f('ix_turns_id'), table_name='turns')
+    op.drop_table('turns')
+    op.drop_index(op.f('ix_conversations_id'), table_name='conversations')
+    op.drop_table('conversations')
+````
 
 ## File: backend/alembic/versions/003_add_translation_column.py
 ````python
@@ -307,24 +415,55 @@ def downgrade() -> None:
     op.drop_table('user_scenario_progress')
 ````
 
-## File: backend/app/api/v1/gamep.py
+## File: backend/alembic/script.py.mako
+````
+"""${message}
+
+Revision ID: ${up_revision}
+Revises: ${down_revision | comma,n}
+Create Date: ${create_date}
+
+"""
+from alembic import op
+import sqlalchemy as sa
+${imports if imports else ""}
+
+revision = ${repr(up_revision)}
+down_revision = ${repr(down_revision)}
+branch_labels = ${repr(branch_labels)}
+depends_on = ${repr(depends_on)}
+
+
+def upgrade() -> None:
+    ${upgrades if upgrades else "pass"}
+
+
+def downgrade() -> None:
+    ${downgrades if downgrades else "pass"}
+````
+
+## File: backend/app/api/v1/game.py
 ````python
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+import random
 from app.db.session import get_db
 from app.core.auth import get_current_user, CurrentUser
-from app.models.gamification import UserScenarioProgress, UserProverb, Proverb
+from app.models.gamification import UserScenarioProgress, UserProverb
+from app.data.proverb_loader import get_proverb_loader
 
 router = APIRouter(tags=["game"])
 
 @router.post("/finish_scenario")
 async def finish_scenario(
-    scenario_id: str,
-    stars: int, # Calculated on frontend based on patience/score
+    payload: dict,
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+
+    scenario_id = payload.get("scenario_id")
+    stars = payload.get("stars")
     # 1. Update Progress
     progress = db.query(UserScenarioProgress).filter_by(
         user_id=current_user.id, scenario_id=scenario_id
@@ -338,22 +477,33 @@ async def finish_scenario(
     if stars > progress.stars:
         progress.stars = stars
     
-    # 2. Loot Logic (If 3 stars or Boss)
+    # 2. Loot Logic 
     loot = None
-    if stars >= 3:
-        # Randomly select a proverb user doesn't have
-        subquery = db.query(UserProverb.proverb_id).filter(UserProverb.user_id == current_user.id)
-        new_proverb = db.query(Proverb).filter(
-            Proverb.language == current_user.target_language,
-            Proverb.id.not_in(subquery)
-        ).order_by(func.random()).first()
+    if stars >= 2:
+        loader = get_proverb_loader()
+        # Get IDs user already has
+        user_owned_ids = [
+            up.proverb_id for up in 
+            db.query(UserProverb).filter(UserProverb.user_id == current_user.id).all()
+        ]
         
-        if new_proverb:
-            user_proverb = UserProverb(user_id=current_user.id, proverb_id=new_proverb.id)
+        # Get available proverbs in user's language
+        available_proverbs = [
+            p for p in loader.get_proverbs_by_language(current_user.target_language)
+            if p['id'] not in user_owned_ids
+        ]
+        
+        # Random pick
+        if available_proverbs:
+            new_proverb = random.choice(available_proverbs)
+            
+            # Save ownership to DB
+            user_proverb = UserProverb(user_id=current_user.id, proverb_id=new_proverb['id'])
             db.add(user_proverb)
+            db.commit()
+            
             loot = new_proverb
 
-    db.commit()
     return {"success": True, "stars": stars, "loot": loot}
 
 @router.get("/progress")
@@ -368,7 +518,48 @@ async def get_wisdom_deck(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    return db.query(Proverb).join(UserProverb).filter(UserProverb.user_id == current_user.id).all()
+    # 1. Get IDs from DB
+    user_proverbs = db.query(UserProverb).filter_by(user_id=current_user.id).all()
+    
+    # 2. Get Content from JSON Loader
+    loader = get_proverb_loader()
+    deck = []
+    
+    for up in user_proverbs:
+        proverb_data = loader.get_proverb(up.proverb_id)
+        if proverb_data:
+            deck.append(proverb_data)
+            
+    return deck
+````
+
+## File: backend/app/api/v1/scenarios.py
+````python
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List
+from app.core.auth import get_current_user, CurrentUser
+from app.db.session import get_db
+from app.data.scenario_loader import get_scenario_loader
+from app.models.schemas import ScenarioResponse
+
+router = APIRouter(tags=["scenarios"])
+
+@router.get("", response_model=List[ScenarioResponse])
+async def get_scenarios(
+    current_user: CurrentUser = Depends(get_current_user)
+):
+    """
+    Get all scenarios for the user's target language.
+    Returns empty list if user hasn't completed onboarding.
+    """
+    if not current_user.target_language:
+        return []
+    
+    loader = get_scenario_loader()
+    scenarios = loader.get_scenarios_by_language(current_user.target_language)
+    
+    return scenarios
 ````
 
 ## File: backend/app/api/v1/vocabulary.py
@@ -463,6 +654,139 @@ async def delete_saved_word(
     db.commit()
     
     return None
+````
+
+## File: backend/app/core/storage.py
+````python
+"""Supabase Storage helper for audio uploads."""
+
+import os
+from typing import Optional
+from app.core.supabase_client import supabase
+from app.core.config import settings
+
+class StorageManager:
+    """Manage audio file uploads to Supabase Storage."""
+    
+    def __init__(self):
+        self.bucket_name = settings.SUPABASE_BUCKET_NAME
+    
+    def _get_object_key(
+        self,
+        user_id: str,
+        conversation_id: str,
+        turn_number: int,
+        file_type: str  # 'user' or 'ai'
+    ) -> str:
+        """
+        Generate standardized object key for audio files.
+        
+        Pattern: {user_id}/{conversation_id}/{turn_number}/{type}.webm
+        """
+        extension = "webm"  # Default, can be made dynamic
+        return f"{user_id}/{conversation_id}/{turn_number}/{file_type}.{extension}"
+    
+    async def upload_audio(
+        self,
+        audio_data: bytes,
+        user_id: str,
+        conversation_id: str,
+        turn_number: int,
+        file_type: str  # 'user' or 'ai'
+    ) -> Optional[str]:
+        """
+        Upload audio to Supabase Storage and return public URL.
+        
+        Returns:
+            Public URL of the uploaded file, or None if upload fails
+        """
+        try:
+            object_key = self._get_object_key(user_id, conversation_id, turn_number, file_type)
+            
+            # Upload to Supabase Storage
+            response = supabase.storage.from_(self.bucket_name).upload(
+                path=object_key,
+                file=audio_data,
+                file_options={"content-type": "audio/webm"}
+            )
+            
+            # Get public URL
+            public_url = supabase.storage.from_(self.bucket_name).get_public_url(object_key)
+            
+            return public_url
+            
+        except Exception as e:
+            print(f"Error uploading audio to Supabase Storage: {e}")
+            return None
+    
+    async def delete_audio(
+        self,
+        user_id: str,
+        conversation_id: str,
+        turn_number: int,
+        file_type: str
+    ) -> bool:
+        """Delete audio file from storage."""
+        try:
+            object_key = self._get_object_key(user_id, conversation_id, turn_number, file_type)
+            supabase.storage.from_(self.bucket_name).remove([object_key])
+            return True
+        except Exception as e:
+            print(f"Error deleting audio: {e}")
+            return False
+
+# Singleton instance
+storage_manager = StorageManager()
+````
+
+## File: backend/app/core/supabase_client.py
+````python
+from supabase import create_client, Client
+from app.core.config import settings
+
+def get_supabase_client() -> Client:
+    """Get Supabase client instance."""
+    return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
+
+supabase: Client = get_supabase_client()
+````
+
+## File: backend/app/data/proverb_loader.py
+````python
+import json
+from pathlib import Path
+from typing import List, Optional, Dict
+from functools import lru_cache
+
+PROVERBS_FILE = Path(__file__).parent / "proverbs.json"
+
+class ProverbLoader:
+    def __init__(self):
+        self._proverbs: Dict[str, dict] = {}
+        self._load_proverbs()
+    
+    def _load_proverbs(self):
+        if not PROVERBS_FILE.exists():
+            print(f"Warning: {PROVERBS_FILE} not found")
+            return
+        
+        with open(PROVERBS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            # Index by ID
+            self._proverbs = {p['id']: p for p in data}
+
+    def get_proverb(self, proverb_id: str) -> Optional[dict]:
+        return self._proverbs.get(proverb_id)
+
+    def get_proverbs_by_language(self, language: str) -> List[dict]:
+        return [p for p in self._proverbs.values() if p['language'] == language]
+
+    def get_all_proverbs(self) -> List[dict]:
+        return list(self._proverbs.values())
+
+@lru_cache()
+def get_proverb_loader() -> ProverbLoader:
+    return ProverbLoader()
 ````
 
 ## File: backend/app/data/proverbs.json
@@ -595,6 +919,111 @@ async def delete_saved_word(
   ]
 ````
 
+## File: backend/app/data/scenario_loader.py
+````python
+import json
+from pathlib import Path
+from typing import Dict, List, Optional
+from functools import lru_cache
+
+SCENARIOS_FILE = Path(__file__).parent / "scenarios.json"
+
+class ScenarioLoader:
+    """Load and manage scenarios from JSON file."""
+    
+    def __init__(self):
+        self._scenarios: Dict[str, dict] = {}
+        self._load_scenarios()
+    
+    def _load_scenarios(self):
+        """Load scenarios from JSON file."""
+        if not SCENARIOS_FILE.exists():
+            raise FileNotFoundError(f"Scenarios file not found: {SCENARIOS_FILE}")
+        
+        with open(SCENARIOS_FILE, 'r', encoding='utf-8') as f:
+            scenarios_list = json.load(f)
+        
+        # Index by ID for quick lookup
+        self._scenarios = {s['id']: s for s in scenarios_list}
+    
+    def get_scenario(self, scenario_id: str) -> Optional[dict]:
+        """Get a scenario by ID."""
+        return self._scenarios.get(scenario_id)
+    
+    def get_scenarios_by_language(self, language: str) -> List[dict]:
+        """Get all scenarios for a given language."""
+        return [s for s in self._scenarios.values() if s['language'] == language]
+    
+    def get_all_scenarios(self) -> List[dict]:
+        """Get all scenarios."""
+        return list(self._scenarios.values())
+    
+    def scenario_exists(self, scenario_id: str) -> bool:
+        """Check if a scenario exists."""
+        return scenario_id in self._scenarios
+
+@lru_cache()
+def get_scenario_loader() -> ScenarioLoader:
+    """Get cached scenario loader instance."""
+    return ScenarioLoader()
+````
+
+## File: backend/app/db/base.py
+````python
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from app.core.config import settings
+
+# Ensure DATABASE_URL uses the correct driver for psycopg3
+database_url = settings.DATABASE_URL
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+engine = create_engine(database_url)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+Base = declarative_base()
+````
+
+## File: backend/app/db/session.py
+````python
+from app.db.base import SessionLocal
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+````
+
+## File: backend/app/models/gamification.py
+````python
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, func, UniqueConstraint
+from app.db.base import Base
+
+class UserScenarioProgress(Base):
+    __tablename__ = "user_scenario_progress"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, ForeignKey("profiles.id"), nullable=False)
+    scenario_id = Column(String, nullable=False)
+    stars = Column(Integer, default=0)
+    unlocked = Column(Boolean, default=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (UniqueConstraint('user_id', 'scenario_id', name='uq_user_scenario'),)
+
+class UserProverb(Base):
+    __tablename__ = "user_proverbs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String, ForeignKey("profiles.id"), nullable=False)
+    proverb_id = Column(String, nullable=False) # We link to JSON ID, not a DB FK for now
+    acquired_at = Column(DateTime(timezone=True), server_default=func.now())
+````
+
 ## File: backend/app/models/saved_word.py
 ````python
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Enum as SQLEnum, func
@@ -612,6 +1041,71 @@ class SavedWord(Base):
     context_sentence = Column(Text, nullable=True)
     language = Column(SQLEnum(LanguageEnum), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+````
+
+## File: backend/app/tts/__init__.py
+````python
+from app.core.config import settings
+
+async def synthesize_speech(text: str, language: str) -> bytes:
+    if settings.TTS_PROVIDER == "gemini":
+        from app.tts.gemini_provider import synthesize_speech as gemini_tts
+        return await gemini_tts(text, language)
+    else:
+        from app.tts.yarngpt_provider import synthesize_speech as yarngpt_tts
+        return await yarngpt_tts(text, language)
+````
+
+## File: backend/app/tts/gemini_provider.py
+````python
+from pydantic_ai import Agent
+
+VOICE_MAP = {
+    "yoruba": "Kainene",
+    "hausa": "Aoife",
+    "igbo": "Kainene",
+}
+
+async def synthesize_speech(text: str, language: str) -> bytes:
+    from pydantic import BaseModel, Field
+    
+    class AudioResponse(BaseModel):
+        audio_data: bytes = Field(description="The audio data")
+    
+    voice_name = VOICE_MAP.get(language, "Kainene")
+    
+    try:
+        agent = Agent('google-gla:gemini-2.5-flash-preview-tts')
+        
+        result = await agent.run(
+            f"Generate speech for this text in {language}",
+            message_history=[],
+            model_settings={
+                "voice_config": {
+                    "voice_name": voice_name
+                }
+            }
+        )
+        
+        if hasattr(result, 'audio_data'):
+            return result.audio_data
+        return b""
+    except Exception as e:
+        print(f"Gemini TTS error: {e}")
+        return b""
+````
+
+## File: backend/app/tts/yarngpt.py
+````python
+# This file is deprecated. Use the new modular structure:
+# - yarngpt_provider.py for YarnGPT TTS
+# - gemini_provider.py for Gemini TTS
+# - __init__.py for the router
+
+# For backward compatibility, import from the main module
+from app.tts import synthesize_speech
+
+__all__ = ['synthesize_speech']
 ````
 
 ## File: backend/scripts/cleanup_old_audio.py
@@ -713,6 +1207,248 @@ def cleanup_old_audio():
 
 if __name__ == "__main__":
     cleanup_old_audio()
+````
+
+## File: backend/scripts/poc_chain.py
+````python
+import asyncio
+import time
+import os
+import sys
+from pathlib import Path
+import httpx
+
+# Add parent directory to path to import from app
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from pydantic_ai import BinaryContent
+from app.ai.agent import get_agent
+
+async def test_chain(audio_file_path: str, language: str = "igbo"):
+    print(f"Starting POC chain test with {audio_file_path}")
+    print(f"Language: {language}")
+    
+    start_total = time.time()
+    
+    with open(audio_file_path, "rb") as f:
+        audio_bytes = f.read()
+    
+    print(f"Audio file loaded: {len(audio_bytes)} bytes")
+    
+    # Get language-specific agent
+    agent = get_agent(language)
+    print(f"Using language-specific agent for {language}")
+    
+    start_gemini = time.time()
+    # Create BinaryContent for audio
+    audio_content = BinaryContent(data=audio_bytes, media_type="audio/webm")
+    
+    result = await agent.run([
+        f"The user is speaking {language}. Respond in {language}.",
+        audio_content
+    ])
+    gemini_time = time.time() - start_gemini
+    
+    data = result.output
+    print(f"\nGemini Response ({gemini_time:.2f}s):")
+    print(f"  Transcription: {data.user_transcription}")
+    print(f"  Grammar Correct: {data.grammar_is_correct}")
+    print(f"  Correction: {data.correction_feedback}")
+    print(f"  Reply (Local): {data.reply_text_local}")
+    print(f"  Reply (English): {data.reply_text_english}")
+    
+    start_tts = time.time()
+    yarngpt_key = os.getenv("YARNGPT_API_KEY", "YOUR_YARNGPT_API_KEY")
+    async with httpx.AsyncClient(timeout=20) as client:
+        tts_response = await client.post(
+            "https://yarngpt.ai/api/v1/tts",
+            headers={"Authorization": f"Bearer {yarngpt_key}"},
+            json={"text": data.reply_text_local, "voice_id": "idera", "language": language},
+        )
+        tts_response.raise_for_status()
+        audio_output = tts_response.content
+    tts_time = time.time() - start_tts
+    
+    output_file = Path("output_audio.wav")
+    output_file.write_bytes(audio_output)
+    print(f"\nYarnGPT TTS ({tts_time:.2f}s):")
+    print(f"  Audio saved to: {output_file}")
+    
+    total_time = time.time() - start_total
+    print(f"\nTotal latency: {total_time:.2f}s")
+    
+    if total_time > 4:
+        print("⚠️  Warning: Latency exceeds 4s target")
+    else:
+        print("✓ Latency within 4s target")
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) < 2:
+        print("Usage: python poc_chain.py <audio_file_path> [language]")
+        sys.exit(1)
+    
+    audio_path = sys.argv[1]
+    lang = sys.argv[2] if len(sys.argv) > 2 else "yoruba"
+    
+    asyncio.run(test_chain(audio_path, lang))
+````
+
+## File: backend/scripts/seed_db.py
+````python
+import json
+import sys
+from pathlib import Path
+
+# Add parent directory to path to import app modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from app.db.base import SessionLocal
+from app.models.gamification import Proverb
+from sqlalchemy.exc import IntegrityError
+
+DATA_DIR = Path(__file__).parent.parent / "app" / "data"
+
+def seed_proverbs():
+    db = SessionLocal()
+    print("🌱 Seeding Proverbs...")
+    
+    try:
+        with open(DATA_DIR / "proverbs.json", "r") as f:
+            proverbs_data = json.load(f)
+            
+        count = 0
+        for item in proverbs_data:
+            # Check if exists
+            exists = db.query(Proverb).filter_by(id=item['id']).first()
+            if not exists:
+                p = Proverb(**item)
+                db.add(p)
+                count += 1
+        
+        db.commit()
+        print(f"✅ Added {count} new proverbs.")
+        
+    except FileNotFoundError:
+        print("❌ proverbs.json not found!")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    seed_proverbs()
+````
+
+## File: backend/.env.example
+````
+GOOGLE_API_KEY=your_google_api_key_here
+YARNGPT_API_KEY=your_yarngpt_api_key_here
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+CORS_ALLOW_ORIGINS=["*"]
+
+# TTS Provider: "yarngpt" or "gemini"
+TTS_PROVIDER=yarngpt
+
+# Note: DATABASE_URL will automatically be converted to use psycopg driver
+# You can also use: postgresql+psycopg://user:password@host:5432/dbname
+````
+
+## File: backend/.gitignore
+````
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+.env
+*.log
+.DS_Store
+.idea
+.vscode
+*.db
+*.sqlite
+alembic.ini.bak
+````
+
+## File: backend/alembic.ini
+````
+[alembic]
+script_location = alembic
+prepend_sys_path = .
+sqlalchemy.url = 
+
+[post_write_hooks]
+
+[loggers]
+keys = root,sqlalchemy,alembic
+
+[handlers]
+keys = console
+
+[formatters]
+keys = generic
+
+[logger_root]
+level = WARN
+handlers = console
+qualname =
+
+[logger_sqlalchemy]
+level = WARN
+handlers =
+qualname = sqlalchemy.engine
+
+[logger_alembic]
+level = INFO
+handlers =
+qualname = alembic
+
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic
+
+[formatter_generic]
+format = %(levelname)-5.5s [%(name)s] %(message)s
+datefmt = %H:%M:%S
+````
+
+## File: backend/Dockerfile
+````
+FROM python:3.11-slim AS base
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+RUN chmod +x entrypoint.sh
+EXPOSE 8080
+CMD ["/app/entrypoint.sh"]
+````
+
+## File: backend/Dockerfile.dev
+````
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+RUN chmod +x entrypoint.sh
+EXPOSE 8080
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+````
+
+## File: backend/entrypoint.sh
+````bash
+#!/bin/bash
+set -e
+alembic upgrade head
+exec uvicorn app.main:app --host 0.0.0.0 --port 8080
 ````
 
 ## File: frontend/src/components/CulturalAlert.tsx
@@ -862,6 +1598,33 @@ export default function PatienceMeter({ level, sentiment, isRecording }: Patienc
 }
 ````
 
+## File: frontend/src/components/RequireAuth.tsx
+````typescript
+import { Navigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
+
+export default function RequireAuth({ children }: { children: JSX.Element }) {
+  const { user, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />
+  }
+
+  return children
+}
+````
+
 ## File: frontend/src/components/ScenarioModal.tsx
 ````typescript
 import { Scenario } from '../lib/api'
@@ -980,6 +1743,91 @@ export default function ScenarioModal({ scenario, onClose, onStart }: ScenarioMo
 }
 ````
 
+## File: frontend/src/contexts/AuthContext.tsx
+````typescript
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { User, Session } from '@supabase/supabase-js'
+import { supabase } from '../lib/supabaseClient'
+
+interface AuthContextType {
+  user: User | null
+  session: Session | null
+  loading: boolean
+  signIn: (email: string, password: string) => Promise<void>
+  signUp: (email: string, password: string) => Promise<void>
+  signOut: () => Promise<void>
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    // Check active sessions and sets the user
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
+
+    // Listen for changes on auth state
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+      setUser(session?.user ?? null)
+      setLoading(false)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw error
+  }
+
+  const signUp = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signUp({ email, password })
+    if (error) throw error
+  }
+
+  const signOut = async () => {
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
+  }
+
+  return (
+    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  )
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider')
+  }
+  return context
+}
+````
+
+## File: frontend/src/lib/supabaseClient.ts
+````typescript
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables')
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+````
+
 ## File: frontend/src/pages/MapDashboard.tsx
 ````typescript
 import { useState, useEffect } from 'react'
@@ -1074,6 +1922,270 @@ export default function MapDashboard() {
     </div>
   )
 }
+````
+
+## File: frontend/src/pages/OnboardingPage.tsx
+````typescript
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { updateUserProfile, Language, Proficiency } from '../lib/api'
+
+export default function OnboardingPage() {
+  const [step, setStep] = useState(1)
+  const [language, setLanguage] = useState<Language | null>(null)
+  const [proficiency, setProficiency] = useState<Proficiency | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  
+  const navigate = useNavigate()
+
+  const languages: { value: Language; label: string; flag: string }[] = [
+    { value: 'yoruba', label: 'Yoruba', flag: '🇳🇬' },
+    { value: 'hausa', label: 'Hausa', flag: '🇳🇬' },
+    { value: 'igbo', label: 'Igbo', flag: '🇳🇬' },
+  ]
+
+  const levels: { value: Proficiency; label: string; description: string }[] = [
+    { value: 'beginner', label: 'Beginner', description: 'Just starting out' },
+    { value: 'intermediate', label: 'Intermediate', description: 'Can hold basic conversations' },
+    { value: 'advanced', label: 'Advanced', description: 'Fluent speaker' },
+  ]
+
+  const handleSubmit = async () => {
+    if (!language || !proficiency) return
+    
+    setLoading(true)
+    setError(null)
+
+    try {
+      await updateUserProfile(language, proficiency)
+      navigate('/dashboard')
+    } catch (err: any) {
+      setError(err.message || 'Failed to save profile')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl p-8">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome to TalkNative!
+          </h1>
+          <p className="text-gray-600">
+            Let's personalize your learning experience
+          </p>
+        </div>
+
+        {/* Progress indicator */}
+        <div className="flex justify-center mb-8">
+          <div className="flex items-center space-x-2">
+            <div className={`w-3 h-3 rounded-full ${step >= 1 ? 'bg-blue-600' : 'bg-gray-300'}`} />
+            <div className={`w-12 h-1 ${step >= 2 ? 'bg-blue-600' : 'bg-gray-300'}`} />
+            <div className={`w-3 h-3 rounded-full ${step >= 2 ? 'bg-blue-600' : 'bg-gray-300'}`} />
+          </div>
+        </div>
+
+        {step === 1 && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-semibold text-center mb-6">
+              What language do you want to learn?
+            </h2>
+            <div className="grid grid-cols-1 gap-4">
+              {languages.map((lang) => (
+                <button
+                  key={lang.value}
+                  onClick={() => setLanguage(lang.value)}
+                  className={`p-6 rounded-xl border-2 transition-all ${
+                    language === lang.value
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center space-x-4">
+                    <span className="text-4xl">{lang.flag}</span>
+                    <span className="text-xl font-semibold">{lang.label}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setStep(2)}
+              disabled={!language}
+              className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+            >
+              Next
+            </button>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-semibold text-center mb-6">
+              What's your current level?
+            </h2>
+            <div className="grid grid-cols-1 gap-4">
+              {levels.map((level) => (
+                <button
+                  key={level.value}
+                  onClick={() => setProficiency(level.value)}
+                  className={`p-6 rounded-xl border-2 transition-all text-left ${
+                    proficiency === level.value
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="font-semibold text-lg">{level.label}</div>
+                  <div className="text-gray-600 text-sm">{level.description}</div>
+                </button>
+              ))}
+            </div>
+
+            {error && (
+              <div className="p-4 rounded-lg bg-red-50 text-red-800 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="flex space-x-4">
+              <button
+                onClick={() => setStep(1)}
+                className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={!proficiency || loading}
+                className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+              >
+                {loading ? 'Saving...' : 'Get Started'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+````
+
+## File: frontend/src/pages/WisdomDeckPage.tsx
+````typescript
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { getWisdomDeck } from '../lib/api'
+
+export default function WisdomDeckPage() {
+  const [cards, setCards] = useState<any[]>([])
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    getWisdomDeck().then(setCards)
+  }, [])
+
+  return (
+    <div className="min-h-screen bg-gray-900 p-8 text-white">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-serif text-yellow-500">Ancient Wisdom</h1>
+        <button onClick={() => navigate('/dashboard')} className="text-gray-400">Back</button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+        {cards.map((card) => (
+          <div key={card.id} className="bg-gray-800 border border-gray-700 p-6 rounded-xl">
+            <div className="text-xs uppercase tracking-widest text-gray-500 mb-2">{card.rarity}</div>
+            <h3 className="text-xl font-bold mb-2 text-yellow-100">{card.content}</h3>
+            <p className="text-sm italic text-gray-400 mb-4">"{card.literal_translation}"</p>
+            <div className="bg-black/30 p-3 rounded">
+              <p className="text-sm text-gray-300">{card.meaning}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+````
+
+## File: frontend/src/index.css
+````css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+````
+
+## File: frontend/Dockerfile
+````
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm i
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 8080
+CMD ["nginx", "-g", "daemon off;"]
+````
+
+## File: frontend/Dockerfile.dev
+````
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host"]
+````
+
+## File: frontend/postcss.config.js
+````javascript
+export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+````
+
+## File: frontend/tailwind.config.js
+````javascript
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}
+````
+
+## File: .env.example
+````
+GOOGLE_API_KEY=your_google_api_key_here
+YARNGPT_API_KEY=your_yarngpt_api_key_here
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+CORS_ALLOW_ORIGINS=["*"]
+
+# TTS Provider: "yarngpt" or "gemini"
+TTS_PROVIDER=yarngpt
 ````
 
 ## File: IMPLEMENTATION_SUMMARY.md
@@ -1358,178 +2470,295 @@ This upgrade transforms TalkNative from a basic chat app into an **immersive lan
 5. **Custom Scenarios** - Allow teachers to create their own
 ````
 
-## File: backend/alembic/versions/001_initial_migration.py
+## File: START_HERE.md
+````markdown
+# 🎉 Phase 2 MVP - COMPLETE!
+
+## ✅ What Was Implemented
+
+### Backend (Python/FastAPI)
+- **Authentication**: JWT token verification with Supabase
+- **Database**: New schema with Users, Conversations, Turns
+- **Scenarios**: 9 scenarios in JSON (Market, Greetings, etc.)
+- **AI Prompts**: Dynamic prompts based on scenario + proficiency
+- **History**: Maintains last 6 turns for context
+- **Storage**: Supabase Storage integration for audio files
+- **API**: 7 new endpoints for Phase 2 flow
+
+### Frontend (React/TypeScript)
+- **Authentication**: Login/Signup with Supabase
+- **Routing**: React Router with protected routes
+- **UI**: Tailwind CSS with modern design
+- **Pages**: Login, Onboarding, Dashboard, Chat
+- **Features**: Audio replay, grammar feedback, translation toggle
+
+### Documentation
+- `PHASE2_IMPLEMENTATION.md` - Technical specification
+- `PHASE2_QUICKSTART.md` - Setup guide
+- `PHASE2_STATUS.md` - Implementation checklist
+- `TODO_SUMMARY.md` - Work completed summary
+
+---
+
+## 🚀 TO GET STARTED (Your Action Required)
+
+### Step 1: Create Supabase Project (5 minutes)
+1. Go to https://app.supabase.com
+2. Click "New Project"
+3. Choose a name and password
+4. Wait for project to provision
+
+### Step 2: Set Up Storage (2 minutes)
+1. Go to Storage in Supabase dashboard
+2. Create new bucket: `chat-audio`
+3. Make it **public**
+
+### Step 3: Get Credentials (1 minute)
+From Supabase Dashboard → Settings → API:
+- Copy `Project URL` 
+- Copy `anon public` key
+- Copy `service_role` key
+
+From Settings → API → JWT Settings:
+- Copy `JWT Secret`
+
+### Step 4: Create .env Files (3 minutes)
+
+**`backend/.env`**:
+```env
+GOOGLE_API_KEY=your_existing_key
+YARNGPT_API_KEY=your_existing_key
+DATABASE_URL=your_existing_db_url
+CORS_ALLOW_ORIGINS=["http://localhost:5173"]
+TTS_PROVIDER=yarngpt
+
+SUPABASE_URL=https://xxxxx.supabase.co
+SUPABASE_SERVICE_KEY=your_service_role_key_here
+SUPABASE_JWT_SECRET=your_jwt_secret_here
+SUPABASE_BUCKET_NAME=chat-audio
+```
+
+**`frontend/.env`** (create this file):
+```env
+VITE_API_BASE_URL=http://localhost:8080
+VITE_SUPABASE_URL=https://xxxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
+```
+
+### Step 5: Install Dependencies (3 minutes)
+
+**Backend**:
+```bash
+cd backend
+pip install -r requirements.txt
+```
+
+**Frontend**:
+```bash
+cd frontend
+npm install
+```
+
+### Step 6: Run Database Migration (1 minute)
+```bash
+cd backend
+alembic upgrade head
+```
+
+### Step 7: Start Development Servers (1 minute)
+```bash
+# From project root
+docker-compose -f docker-compose.dev.yml up --build
+```
+
+### Step 8: Test! (5 minutes)
+1. Open http://localhost:5173
+2. Click "Sign up"
+3. Create account with email/password
+4. Complete onboarding (choose language & level)
+5. Select a scenario from dashboard
+6. Start chatting!
+
+---
+
+## 🔍 What to Expect
+
+### User Journey
+```
+Login → Onboarding → Dashboard → Chat → Conversation
+  ↓         ↓           ↓         ↓          ↓
+Email   Language    Scenarios  Record   AI responds
+       Proficiency              Audio    with audio
+```
+
+### Key Features Working
+✅ User authentication and session management
+✅ Personalized onboarding flow
+✅ Scenario-based conversation selection
+✅ Audio recording and playback
+✅ AI grammar feedback
+✅ Conversation history (remembers context)
+✅ Audio storage in Supabase
+✅ Grammar correction badges
+✅ Modern, responsive UI
+
+---
+
+## 🐛 Troubleshooting
+
+### "Missing Supabase environment variables"
+→ Make sure you created both `.env` files with correct values
+
+### "Failed to upload audio"
+→ Check that `chat-audio` bucket exists and is public in Supabase
+
+### "Invalid authentication token"
+→ Verify `SUPABASE_JWT_SECRET` matches your project's JWT secret
+
+### Frontend won't build
+→ Delete `node_modules` and run `npm install` again
+
+### Backend migration fails
+→ Check your `DATABASE_URL` is correct and PostgreSQL is running
+
+---
+
+## 📁 Project Structure
+
+```
+talknative-backend/
+├── backend/
+│   ├── app/
+│   │   ├── ai/              # Pydantic AI agents
+│   │   ├── api/v1/          # API endpoints
+│   │   ├── core/            # Auth, config, storage
+│   │   ├── data/            # scenarios.json
+│   │   ├── models/          # SQLAlchemy models
+│   │   └── tts/             # TTS providers
+│   └── alembic/versions/    # Database migrations
+├── frontend/
+│   └── src/
+│       ├── pages/           # Login, Onboarding, Dashboard, Chat
+│       ├── contexts/        # Auth context
+│       ├── lib/             # API client, Supabase
+│       └── components/      # RequireAuth guard
+└── docs/                    # All the .md files
+
+```
+
+---
+
+## 🎯 Success Criteria
+
+Phase 2 is working when you can:
+1. ✅ Sign up and log in
+2. ✅ Complete onboarding
+3. ✅ See scenarios filtered by your language
+4. ✅ Start a conversation
+5. ✅ Record audio and get AI response with audio
+6. ✅ See grammar feedback
+7. ✅ Continue multi-turn conversations
+8. ✅ Audio plays from Supabase Storage
+
+---
+
+## 📞 Need Help?
+
+Check these files:
+- **Setup**: `PHASE2_QUICKSTART.md`
+- **Architecture**: `PHASE2_IMPLEMENTATION.md`
+- **Status**: `PHASE2_STATUS.md`
+
+Look at the terminal logs:
+```bash
+docker-compose -f docker-compose.dev.yml logs -f backend
+docker-compose -f docker-compose.dev.yml logs -f frontend
+```
+
+---
+
+## 🚢 Deployment (After Local Testing Works)
+
+1. Add Supabase secrets to GitHub repository
+2. Update `.github/workflows/deploy.yml` with Supabase env vars
+3. Configure Cloud Run environment variables
+4. Deploy!
+
+See `PHASE2_IMPLEMENTATION.md` section "Deployment Updates Needed" for details.
+
+---
+
+**Estimated Setup Time**: ~15 minutes  
+**Your Action Required**: Complete Steps 1-8 above  
+**Then**: Everything should work! 🎉
+
+---
+
+*All code is implemented and ready to run. You just need to configure Supabase and start the servers!*
+````
+
+## File: backend/alembic/env.py
 ````python
-"""Initial migration
+from logging.config import fileConfig
+from sqlalchemy import engine_from_config
+from sqlalchemy import pool
+from alembic import context
+import sys
+from pathlib import Path
 
-Revision ID: 001
-Revises: 
-Create Date: 2025-11-29
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-"""
-from alembic import op
-import sqlalchemy as sa
-
-revision = '001'
-down_revision = None
-branch_labels = None
-depends_on = None
-
-
-def upgrade() -> None:
-    op.create_table('conversations',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('language', sa.String(), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_conversations_id'), 'conversations', ['id'], unique=False)
-    
-    op.create_table('turns',
-    sa.Column('id', sa.Integer(), nullable=False),
-    sa.Column('conversation_id', sa.Integer(), nullable=False),
-    sa.Column('role', sa.String(), nullable=False),
-    sa.Column('transcription', sa.Text(), nullable=True),
-    sa.Column('reply_text_local', sa.Text(), nullable=True),
-    sa.Column('reply_text_english', sa.Text(), nullable=True),
-    sa.Column('correction_feedback', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-    sa.ForeignKeyConstraint(['conversation_id'], ['conversations.id'], ),
-    sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_turns_id'), 'turns', ['id'], unique=False)
-
-
-def downgrade() -> None:
-    op.drop_index(op.f('ix_turns_id'), table_name='turns')
-    op.drop_table('turns')
-    op.drop_index(op.f('ix_conversations_id'), table_name='conversations')
-    op.drop_table('conversations')
-````
-
-## File: backend/alembic/script.py.mako
-````
-"""${message}
-
-Revision ID: ${up_revision}
-Revises: ${down_revision | comma,n}
-Create Date: ${create_date}
-
-"""
-from alembic import op
-import sqlalchemy as sa
-${imports if imports else ""}
-
-revision = ${repr(up_revision)}
-down_revision = ${repr(down_revision)}
-branch_labels = ${repr(branch_labels)}
-depends_on = ${repr(depends_on)}
-
-
-def upgrade() -> None:
-    ${upgrades if upgrades else "pass"}
-
-
-def downgrade() -> None:
-    ${downgrades if downgrades else "pass"}
-````
-
-## File: backend/app/ai/agent.py
-````python
-from pydantic import BaseModel, Field
-from pydantic_ai import Agent
+from app.db.base import Base
 from app.core.config import settings
+from app.models.conversation import Conversation
+from app.models.turn import Turn
+from app.models.user import Profile
 
-class ConversationTurn(BaseModel):
-    user_transcription: str = Field(description="Exact transcription of what the user said")
-    grammar_is_correct: bool = Field(description="True if the user's grammar was perfect")
-    correction_feedback: str | None = Field(description="English feedback if grammar was wrong")
-    reply_text_local: str = Field(description="The response in Igbo/Hausa/Yoruba")
-    reply_text_english: str = Field(description="English translation of the response")
-    sentiment_score: float = Field(description="My emotional reaction to the user's input, from -1.0 (impatient/angry) to 1.0 (very pleased/encouraging).")
-    current_price: int | None = Field(description="For market scenarios only: the current price offered by the seller. If not a market scenario return null.")
-    reply_text_local: str = Field(description="The response. if cultural_flag is True, this hsould be an angry/shocked reaction.")
-    cultural_flag: bool = Field(description="Set to True if user was culturally rude (e.g. greeting elder casually, refusing food rudely).")
-    cultral_feedback: str | None = Field(description="If flag is True, explain the cultural mistake (e.g 'You must kneel for elders'). ")
+config = context.config
 
-SYSTEM_PROMPTS = {
-    "yoruba": (
-        "You are a native Yoruba language tutor helping learners master this tonal language. "
-        "FOCUS AREAS: "
-        "- Tone accuracy (high/mid/low tones) - tones change word meanings "
-        "- Proper use of vowel harmony (oral vs nasal vowels) "
-        "- Culturally appropriate greetings based on time/context "
-        "- Correct verb serialization patterns "
-        "\n"
-        "COMMON LEARNER MISTAKES: "
-        "- Incorrect tone patterns (e.g., 'ọmọ' child vs 'ọmọ́' offspring) "
-        "- Missing or wrong diacritics "
-        "- Improper verb ordering in serial constructions "
-        "- Wrong vowel harmony in compound words "
-        "\n"
-        "You will receive audio from a learner speaking Yoruba. "
-        "1. Transcribe EXACTLY what they said with proper tone marks (á, à, ā, é, è, etc.) "
-        "2. If they made mistakes, explain briefly in English focusing on tones, vowels, or grammar "
-        "3. Continue the conversation naturally in Yoruba, demonstrating correct usage "
-        "4. Use appropriate cultural expressions and greetings "
-        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if they are rude, my score will be negative)."
-    ),
-    "hausa": (
-        "You are a native Hausa language tutor helping learners master this important West African language. "
-        "FOCUS AREAS: "
-        "- Grammatical gender (masculine/feminine) and agreement "
-        "- Grade system (verb modifications showing direction/voice) "
-        "- Proper use of aspect markers (continuative, completive, future) "
-        "- Correct usage of pronouns and possessives "
-        "\n"
-        "COMMON LEARNER MISTAKES: "
-        "- Gender agreement errors (adjectives/verbs not matching noun gender) "
-        "- Grade confusion (using wrong verb grade for context) "
-        "- Aspect marker misuse (na/ina/za confusion) "
-        "- Incorrect pronoun forms for gender "
-        "\n"
-        "You will receive audio from a learner speaking Hausa. "
-        "1. Transcribe EXACTLY what they said (use proper Hausa orthography) "
-        "2. If they made mistakes, explain briefly in English focusing on gender, grades, or aspects "
-        "3. Continue the conversation naturally in Hausa, demonstrating correct usage "
-        "4. Use culturally appropriate Islamic greetings when relevant (Salam alaikum, etc.)"
-        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if they are polite, my score will be positive)."
-    ),
-    "igbo": (
-        "You are a native Igbo language tutor helping learners master this complex tonal language. "
-        "FOCUS AREAS: "
-        "- Tone patterns (high/low/downstep) - crucial for meaning "
-        "- Vowel harmony rules (must follow throughout words) "
-        "- Serial verb constructions (multiple verbs in sequence) "
-        "- Proper use of noun class prefixes "
-        "\n"
-        "COMMON LEARNER MISTAKES: "
-        "- Tone errors causing meaning changes "
-        "- Vowel harmony violations (mixing incompatible vowels) "
-        "- Wrong verb ordering in serial constructions "
-        "- Incorrect or missing noun class markers "
-        "- Improper use of stative verbs "
-        "\n"
-        "You will receive audio from a learner speaking Igbo. "
-        "1. Transcribe EXACTLY what they said with proper tone marks (á, à, ọ́, ọ̀, etc.) "
-        "2. If they made mistakes, explain briefly in English focusing on tones, vowel harmony, or verb patterns "
-        "3. Continue the conversation naturally in Igbo, demonstrating correct usage "
-        "4. Use community-oriented expressions and appropriate proverbs when relevant"
-        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if their grammar is very poor, my score will be low)."
-    )
-}
+# Ensure DATABASE_URL uses the correct driver for psycopg3
+database_url = settings.DATABASE_URL
+if database_url.startswith("postgresql://"):
+    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
 
-def get_agent(language: str) -> Agent:
-    system_prompt = SYSTEM_PROMPTS.get(language, SYSTEM_PROMPTS["yoruba"])
-    
-    return Agent(
-        'google-gla:gemini-2.5-flash',
-        output_type=ConversationTurn,
-        system_prompt=system_prompt,
+config.set_main_option("sqlalchemy.url", database_url)
+
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+target_metadata = Base.metadata
+
+def run_migrations_offline() -> None:
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
     )
 
-# Backward compatibility: default agent for Yoruba
-agent = get_agent("yoruba")
+    with context.begin_transaction():
+        context.run_migrations()
+
+def run_migrations_online() -> None:
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection, target_metadata=target_metadata
+        )
+
+        with context.begin_transaction():
+            context.run_migrations()
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
 ````
 
 ## File: backend/app/ai/prompt_builder.py
@@ -2023,177 +3252,166 @@ async def get_conversation_turns(
     ]
 ````
 
-## File: backend/app/api/v1/scenarios.py
+## File: backend/app/api/v1/users.py
 ````python
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
 from app.core.auth import get_current_user, CurrentUser
 from app.db.session import get_db
-from app.data.scenario_loader import get_scenario_loader
-from app.models.schemas import ScenarioResponse
+from app.models.user import Profile
+from app.models.schemas import UserProfileUpdate, UserProfileResponse
 
-router = APIRouter(tags=["scenarios"])
+router = APIRouter(tags=["users"])
 
-@router.get("", response_model=List[ScenarioResponse])
-async def get_scenarios(
-    current_user: CurrentUser = Depends(get_current_user)
+@router.post("/profile", response_model=UserProfileResponse)
+async def update_user_profile(
+    profile: UserProfileUpdate,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
-    Get all scenarios for the user's target language.
-    Returns empty list if user hasn't completed onboarding.
+    Update user profile with target language and proficiency level.
+    Called during onboarding.
     """
-    if not current_user.target_language:
-        return []
+    user = db.query(Profile).filter(Profile.id == current_user.id).first()
     
-    loader = get_scenario_loader()
-    scenarios = loader.get_scenarios_by_language(current_user.target_language)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
     
-    return scenarios
+    # Update user profile
+    user.target_language = profile.target_language
+    user.proficiency_level = profile.proficiency_level
+    
+    db.commit()
+    db.refresh(user)
+    
+    return user
+
+@router.get("/profile", response_model=UserProfileResponse)
+async def get_user_profile(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get current user's profile."""
+    user = db.query(Profile).filter(Profile.id == current_user.id).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return user
 ````
 
-## File: backend/app/core/storage.py
+## File: backend/app/core/auth.py
 ````python
-"""Supabase Storage helper for audio uploads."""
-
-import os
-from typing import Optional
-from app.core.supabase_client import supabase
+import jwt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
 from app.core.config import settings
+from app.db.session import get_db
+from app.models.user import Profile
 
-class StorageManager:
-    """Manage audio file uploads to Supabase Storage."""
+security = HTTPBearer()
+
+class CurrentUser:
+    """Current authenticated user context."""
+    def __init__(self, user: Profile):
+        self.user = user
+        self.id = user.id
+        self.email = user.email
+        self.target_language = user.target_language
+        self.proficiency_level = user.proficiency_level
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> CurrentUser:
+    """
+    Verify JWT token from Supabase and return current user.
     
-    def __init__(self):
-        self.bucket_name = settings.SUPABASE_BUCKET_NAME
+    Raises:
+        HTTPException: 401 if token is invalid or user not found.
+    """
+    token = credentials.credentials
     
-    def _get_object_key(
-        self,
-        user_id: str,
-        conversation_id: str,
-        turn_number: int,
-        file_type: str  # 'user' or 'ai'
-    ) -> str:
-        """
-        Generate standardized object key for audio files.
+    try:
+        # Decode JWT using Supabase JWT secret
+        payload = jwt.decode(
+            token,
+            settings.SUPABASE_JWT_SECRET,
+            algorithms=["HS256"],
+            audience="authenticated"
+        )
         
-        Pattern: {user_id}/{conversation_id}/{turn_number}/{type}.webm
-        """
-        extension = "webm"  # Default, can be made dynamic
-        return f"{user_id}/{conversation_id}/{turn_number}/{file_type}.{extension}"
-    
-    async def upload_audio(
-        self,
-        audio_data: bytes,
-        user_id: str,
-        conversation_id: str,
-        turn_number: int,
-        file_type: str  # 'user' or 'ai'
-    ) -> Optional[str]:
-        """
-        Upload audio to Supabase Storage and return public URL.
+        user_id: str = payload.get("sub")
+        email: str = payload.get("email")
         
-        Returns:
-            Public URL of the uploaded file, or None if upload fails
-        """
-        try:
-            object_key = self._get_object_key(user_id, conversation_id, turn_number, file_type)
-            
-            # Upload to Supabase Storage
-            response = supabase.storage.from_(self.bucket_name).upload(
-                path=object_key,
-                file=audio_data,
-                file_options={"content-type": "audio/webm"}
+        if not user_id or not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token"
             )
-            
-            # Get public URL
-            public_url = supabase.storage.from_(self.bucket_name).get_public_url(object_key)
-            
-            return public_url
-            
-        except Exception as e:
-            print(f"Error uploading audio to Supabase Storage: {e}")
-            return None
-    
-    async def delete_audio(
-        self,
-        user_id: str,
-        conversation_id: str,
-        turn_number: int,
-        file_type: str
-    ) -> bool:
-        """Delete audio file from storage."""
-        try:
-            object_key = self._get_object_key(user_id, conversation_id, turn_number, file_type)
-            supabase.storage.from_(self.bucket_name).remove([object_key])
-            return True
-        except Exception as e:
-            print(f"Error deleting audio: {e}")
-            return False
-
-# Singleton instance
-storage_manager = StorageManager()
+        
+        # Get or create user in our database
+        user = db.query(Profile).filter(Profile.id == user_id).first()
+        
+        if not user:
+            # Create user if doesn't exist (first login)
+            user = Profile(id=user_id, email=email)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        
+        return CurrentUser(user)
+        
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired"
+        )
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Authentication failed: {str(e)}"
+        )
 ````
 
-## File: backend/app/core/supabase_client.py
+## File: backend/app/core/config.py
 ````python
-from supabase import create_client, Client
-from app.core.config import settings
+from pydantic_settings import BaseSettings
+from typing import Literal
 
-def get_supabase_client() -> Client:
-    """Get Supabase client instance."""
-    return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
+class Settings(BaseSettings):
+    GOOGLE_API_KEY: str
+    YARNGPT_API_KEY: str
+    DATABASE_URL: str
+    CORS_ALLOW_ORIGINS: list[str] = ["*"]
+    
+    TTS_PROVIDER: Literal["yarngpt", "gemini"] = "yarngpt"
+    
+    # Supabase configuration
+    SUPABASE_URL: str
+    SUPABASE_SERVICE_KEY: str
+    SUPABASE_JWT_SECRET: str
+    SUPABASE_BUCKET_NAME: str = "chat-audio"
 
-supabase: Client = get_supabase_client()
-````
+    model_config = {
+        "env_file": ".env",
+        "extra": "ignore",
+    }
 
-## File: backend/app/data/scenario_loader.py
-````python
-import json
-from pathlib import Path
-from typing import Dict, List, Optional
-from functools import lru_cache
-
-SCENARIOS_FILE = Path(__file__).parent / "scenarios.json"
-
-class ScenarioLoader:
-    """Load and manage scenarios from JSON file."""
-    
-    def __init__(self):
-        self._scenarios: Dict[str, dict] = {}
-        self._load_scenarios()
-    
-    def _load_scenarios(self):
-        """Load scenarios from JSON file."""
-        if not SCENARIOS_FILE.exists():
-            raise FileNotFoundError(f"Scenarios file not found: {SCENARIOS_FILE}")
-        
-        with open(SCENARIOS_FILE, 'r', encoding='utf-8') as f:
-            scenarios_list = json.load(f)
-        
-        # Index by ID for quick lookup
-        self._scenarios = {s['id']: s for s in scenarios_list}
-    
-    def get_scenario(self, scenario_id: str) -> Optional[dict]:
-        """Get a scenario by ID."""
-        return self._scenarios.get(scenario_id)
-    
-    def get_scenarios_by_language(self, language: str) -> List[dict]:
-        """Get all scenarios for a given language."""
-        return [s for s in self._scenarios.values() if s['language'] == language]
-    
-    def get_all_scenarios(self) -> List[dict]:
-        """Get all scenarios."""
-        return list(self._scenarios.values())
-    
-    def scenario_exists(self, scenario_id: str) -> bool:
-        """Check if a scenario exists."""
-        return scenario_id in self._scenarios
-
-@lru_cache()
-def get_scenario_loader() -> ScenarioLoader:
-    """Get cached scenario loader instance."""
-    return ScenarioLoader()
+settings = Settings()
 ````
 
 ## File: backend/app/data/scenarios.json
@@ -2548,499 +3766,72 @@ def get_scenario_loader() -> ScenarioLoader:
 ]
 ````
 
-## File: backend/app/db/base.py
+## File: backend/app/models/user.py
 ````python
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+import enum
+from sqlalchemy import Column, String, DateTime, Enum as SQLEnum, func
+from app.db.base import Base
+
+class LanguageEnum(str, enum.Enum):
+    yoruba = "yoruba"
+    hausa = "hausa"
+    igbo = "igbo"
+
+class ProficiencyEnum(str, enum.Enum):
+    beginner = "beginner"
+    intermediate = "intermediate"
+    advanced = "advanced"
+
+class Profile(Base):
+    __tablename__ = "profiles"
+
+    id = Column(String, primary_key=True, index=True)  # Supabase Auth UUID
+    email = Column(String, unique=True, index=True, nullable=False)
+    target_language = Column(SQLEnum(LanguageEnum), nullable=True)
+    proficiency_level = Column(SQLEnum(ProficiencyEnum), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+````
+
+## File: backend/app/tts/yarngpt_provider.py
+````python
+import httpx
 from app.core.config import settings
-
-# Ensure DATABASE_URL uses the correct driver for psycopg3
-database_url = settings.DATABASE_URL
-if database_url.startswith("postgresql://"):
-    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-
-engine = create_engine(database_url)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
-````
-
-## File: backend/app/db/session.py
-````python
-from app.db.base import SessionLocal
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-````
-
-## File: backend/app/models/schemas.py
-````python
-from pydantic import BaseModel, EmailStr
-from typing import Optional, Literal
-from datetime import datetime
-
-# Enums
-LanguageType = Literal["yoruba", "hausa", "igbo"]
-ProficiencyType = Literal["beginner", "intermediate", "advanced"]
-DifficultyType = Literal["beginner", "intermediate", "advanced"]
-
-# User schemas
-class UserProfileUpdate(BaseModel):
-    target_language: LanguageType
-    proficiency_level: ProficiencyType
-
-class UserProfileResponse(BaseModel):
-    id: str
-    email: str
-    target_language: Optional[LanguageType]
-    proficiency_level: Optional[ProficiencyType]
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-# Scenario schemas
-class ScenarioRoles(BaseModel):
-    user: str
-    ai: str
-
-class ScenarioMission(BaseModel):
-    objective: str
-    success_condition: str
-
-class KeyVocabulary(BaseModel):
-    word: str
-    meaning: str
-
-class HaggleSettings(BaseModel):
-    start_price: int
-    target_price: int
-    reserve_price: int
-
-class ScenarioResponse(BaseModel):
-    id: str
-    language: LanguageType
-    category: Optional[str] = None
-    title: str
-    difficulty: DifficultyType
-    description: Optional[str] = None
-    roles: Optional[ScenarioRoles] = None
-    mission: Optional[ScenarioMission] = None
-    key_vocabulary: Optional[list[KeyVocabulary]] = None
-    system_prompt_context: Optional[str] = None
-    haggles_settings: Optional[HaggleSettings] = None
-
-# Conversation schemas
-class ConversationStartRequest(BaseModel):
-    scenario_id: str
-
-class ConversationStartResponse(BaseModel):
-    conversation_id: str
-    initial_ai_greeting: Optional[str] = None
-    initial_ai_audio_url: Optional[str] = None
-
-# Turn schemas
-class TurnResponse(BaseModel):
-    turn_number: int
-    transcription: str
-    ai_text: str
-    ai_text_english: Optional[str]
-    ai_audio_url: str
-    correction: Optional[str]
-    grammar_score: Optional[int]
-    sentiment_score: Optional[float] = None
-    negotiated_price: Optional[int] = None
-
-# Conversation history schemas
-class ConversationHistoryResponse(BaseModel):
-    conversation_id: str
-    scenario_title: str
-    scenario_id: str
-    created_at: datetime
-    turn_count: int
-    last_message: Optional[str]
-    active: bool
-
-# Vocabulary schemas
-class SaveWordRequest(BaseModel):
-    word: str
-    translation: str
-    context_sentence: Optional[str] = None
-
-class SavedWordResponse(BaseModel):
-    id: int
-    word: str
-    translation: str
-    context_sentence: Optional[str]
-    language: LanguageType
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-````
-
-## File: backend/app/tts/__init__.py
-````python
-from app.core.config import settings
-
-async def synthesize_speech(text: str, language: str) -> bytes:
-    if settings.TTS_PROVIDER == "gemini":
-        from app.tts.gemini_provider import synthesize_speech as gemini_tts
-        return await gemini_tts(text, language)
-    else:
-        from app.tts.yarngpt_provider import synthesize_speech as yarngpt_tts
-        return await yarngpt_tts(text, language)
-````
-
-## File: backend/app/tts/gemini_provider.py
-````python
-from pydantic_ai import Agent
 
 VOICE_MAP = {
-    "yoruba": "Kainene",
-    "hausa": "Aoife",
-    "igbo": "Kainene",
+    "yoruba": "idera",
+    "hausa": "zainab",
+    "igbo": "adaora",
 }
 
 async def synthesize_speech(text: str, language: str) -> bytes:
-    from pydantic import BaseModel, Field
-    
-    class AudioResponse(BaseModel):
-        audio_data: bytes = Field(description="The audio data")
-    
-    voice_name = VOICE_MAP.get(language, "Kainene")
-    
+    voice_id = VOICE_MAP.get(language, "idera")
     try:
-        agent = Agent('google-gla:gemini-2.5-flash-preview-tts')
-        
-        result = await agent.run(
-            f"Generate speech for this text in {language}",
-            message_history=[],
-            model_settings={
-                "voice_config": {
-                    "voice_name": voice_name
-                }
-            }
-        )
-        
-        if hasattr(result, 'audio_data'):
-            return result.audio_data
-        return b""
-    except Exception as e:
-        print(f"Gemini TTS error: {e}")
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.post(
+                "https://yarngpt.ai/api/v1/tts",
+                headers={"Authorization": f"Bearer {settings.YARNGPT_API_KEY}"},
+                json={"text": text, "voice_id": voice_id, "language": language},
+            )
+            r.raise_for_status()
+            return r.content
+    except Exception:
         return b""
 ````
 
-## File: backend/app/tts/yarngpt.py
-````python
-# This file is deprecated. Use the new modular structure:
-# - yarngpt_provider.py for YarnGPT TTS
-# - gemini_provider.py for Gemini TTS
-# - __init__.py for the router
-
-# For backward compatibility, import from the main module
-from app.tts import synthesize_speech
-
-__all__ = ['synthesize_speech']
+## File: backend/requirements.txt
 ````
-
-## File: backend/scripts/poc_chain.py
-````python
-import asyncio
-import time
-import os
-import sys
-from pathlib import Path
-import httpx
-
-# Add parent directory to path to import from app
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from pydantic_ai import BinaryContent
-from app.ai.agent import get_agent
-
-async def test_chain(audio_file_path: str, language: str = "igbo"):
-    print(f"Starting POC chain test with {audio_file_path}")
-    print(f"Language: {language}")
-    
-    start_total = time.time()
-    
-    with open(audio_file_path, "rb") as f:
-        audio_bytes = f.read()
-    
-    print(f"Audio file loaded: {len(audio_bytes)} bytes")
-    
-    # Get language-specific agent
-    agent = get_agent(language)
-    print(f"Using language-specific agent for {language}")
-    
-    start_gemini = time.time()
-    # Create BinaryContent for audio
-    audio_content = BinaryContent(data=audio_bytes, media_type="audio/webm")
-    
-    result = await agent.run([
-        f"The user is speaking {language}. Respond in {language}.",
-        audio_content
-    ])
-    gemini_time = time.time() - start_gemini
-    
-    data = result.output
-    print(f"\nGemini Response ({gemini_time:.2f}s):")
-    print(f"  Transcription: {data.user_transcription}")
-    print(f"  Grammar Correct: {data.grammar_is_correct}")
-    print(f"  Correction: {data.correction_feedback}")
-    print(f"  Reply (Local): {data.reply_text_local}")
-    print(f"  Reply (English): {data.reply_text_english}")
-    
-    start_tts = time.time()
-    yarngpt_key = os.getenv("YARNGPT_API_KEY", "YOUR_YARNGPT_API_KEY")
-    async with httpx.AsyncClient(timeout=20) as client:
-        tts_response = await client.post(
-            "https://yarngpt.ai/api/v1/tts",
-            headers={"Authorization": f"Bearer {yarngpt_key}"},
-            json={"text": data.reply_text_local, "voice_id": "idera", "language": language},
-        )
-        tts_response.raise_for_status()
-        audio_output = tts_response.content
-    tts_time = time.time() - start_tts
-    
-    output_file = Path("output_audio.wav")
-    output_file.write_bytes(audio_output)
-    print(f"\nYarnGPT TTS ({tts_time:.2f}s):")
-    print(f"  Audio saved to: {output_file}")
-    
-    total_time = time.time() - start_total
-    print(f"\nTotal latency: {total_time:.2f}s")
-    
-    if total_time > 4:
-        print("⚠️  Warning: Latency exceeds 4s target")
-    else:
-        print("✓ Latency within 4s target")
-
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 2:
-        print("Usage: python poc_chain.py <audio_file_path> [language]")
-        sys.exit(1)
-    
-    audio_path = sys.argv[1]
-    lang = sys.argv[2] if len(sys.argv) > 2 else "yoruba"
-    
-    asyncio.run(test_chain(audio_path, lang))
-````
-
-## File: backend/.env.example
-````
-GOOGLE_API_KEY=your_google_api_key_here
-YARNGPT_API_KEY=your_yarngpt_api_key_here
-DATABASE_URL=postgresql://user:password@host:5432/dbname
-CORS_ALLOW_ORIGINS=["*"]
-
-# TTS Provider: "yarngpt" or "gemini"
-TTS_PROVIDER=yarngpt
-
-# Note: DATABASE_URL will automatically be converted to use psycopg driver
-# You can also use: postgresql+psycopg://user:password@host:5432/dbname
-````
-
-## File: backend/.gitignore
-````
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-ENV/
-.venv
-.env
-*.log
-.DS_Store
-.idea
-.vscode
-*.db
-*.sqlite
-alembic.ini.bak
-````
-
-## File: backend/alembic.ini
-````
-[alembic]
-script_location = alembic
-prepend_sys_path = .
-sqlalchemy.url = 
-
-[post_write_hooks]
-
-[loggers]
-keys = root,sqlalchemy,alembic
-
-[handlers]
-keys = console
-
-[formatters]
-keys = generic
-
-[logger_root]
-level = WARN
-handlers = console
-qualname =
-
-[logger_sqlalchemy]
-level = WARN
-handlers =
-qualname = sqlalchemy.engine
-
-[logger_alembic]
-level = INFO
-handlers =
-qualname = alembic
-
-[handler_console]
-class = StreamHandler
-args = (sys.stderr,)
-level = NOTSET
-formatter = generic
-
-[formatter_generic]
-format = %(levelname)-5.5s [%(name)s] %(message)s
-datefmt = %H:%M:%S
-````
-
-## File: backend/Dockerfile
-````
-FROM python:3.11-slim AS base
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-RUN chmod +x entrypoint.sh
-EXPOSE 8080
-CMD ["/app/entrypoint.sh"]
-````
-
-## File: backend/Dockerfile.dev
-````
-FROM python:3.11-slim
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY . .
-RUN chmod +x entrypoint.sh
-EXPOSE 8080
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
-````
-
-## File: backend/entrypoint.sh
-````bash
-#!/bin/bash
-set -e
-alembic upgrade head
-exec uvicorn app.main:app --host 0.0.0.0 --port 8080
-````
-
-## File: frontend/src/components/RequireAuth.tsx
-````typescript
-import { Navigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-
-export default function RequireAuth({ children }: { children: JSX.Element }) {
-  const { user, loading } = useAuth()
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
-
-  return children
-}
-````
-
-## File: frontend/src/contexts/AuthContext.tsx
-````typescript
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { User, Session } from '@supabase/supabase-js'
-import { supabase } from '../lib/supabaseClient'
-
-interface AuthContextType {
-  user: User | null
-  session: Session | null
-  loading: boolean
-  signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string) => Promise<void>
-  signOut: () => Promise<void>
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
-
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    // Check active sessions and sets the user
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-
-    // Listen for changes on auth state
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) throw error
-  }
-
-  const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({ email, password })
-    if (error) throw error
-  }
-
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
-  }
-
-  return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  )
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
-}
+fastapi==0.122.0
+uvicorn[standard]==0.38.0
+httpx==0.28.1
+pydantic==2.12.5
+pydantic-settings==2.12.0
+pydantic-ai==1.25.1
+python-multipart==0.0.20
+sqlalchemy==2.0.44
+alembic==1.17.2
+psycopg[binary]==3.2.13
+pyjwt==2.10.1
+supabase==2.24.0
 ````
 
 ## File: frontend/src/lib/api.ts
@@ -3293,20 +4084,28 @@ export async function deleteSavedWord(wordId: number): Promise<void> {
     throw new Error('Failed to delete word')
   }
 }
-````
 
-## File: frontend/src/lib/supabaseClient.ts
-````typescript
-import { createClient } from '@supabase/supabase-js'
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+export async function getUserProgress() {
+  const response = await apiRequest('/api/v1/game/progress')
+  if (!response.ok) throw new Error('Failed to fetch progress')
+  return response.json()
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export async function finishScenario(scenarioId: string, stars: number) {
+  const response = await apiRequest('/api/v1/game/finish_scenario', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scenario_id: scenarioId, stars }),
+  })
+  if (!response.ok) throw new Error('Failed to update progress')
+  return response.json()
+}
+
+export async function getWisdomDeck() {
+  const response = await apiRequest('/api/v1/game/deck')
+  if (!response.ok) throw new Error('Failed to fetch deck')
+  return response.json()
+}
 ````
 
 ## File: frontend/src/pages/DashboardPage.tsx
@@ -3506,7 +4305,7 @@ export default function DashboardPage() {
                   )}
                   
                   <button
-                    onClick={() => handleStartScenario(scenario.id)}
+                    onClick={() => handleScenarioClick(scenario)}
                     disabled={starting === scenario.id}
                     className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
                   >
@@ -3532,44 +4331,37 @@ export default function DashboardPage() {
 }
 ````
 
-## File: frontend/src/pages/OnboardingPage.tsx
+## File: frontend/src/pages/LoginPage.tsx
 ````typescript
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { updateUserProfile, Language, Proficiency } from '../lib/api'
+import { useNavigate} from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 
-export default function OnboardingPage() {
-  const [step, setStep] = useState(1)
-  const [language, setLanguage] = useState<Language | null>(null)
-  const [proficiency, setProficiency] = useState<Proficiency | null>(null)
-  const [loading, setLoading] = useState(false)
+export default function LoginPage() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [isSignUp, setIsSignUp] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
   
+  const { signIn, signUp } = useAuth()
   const navigate = useNavigate()
 
-  const languages: { value: Language; label: string; flag: string }[] = [
-    { value: 'yoruba', label: 'Yoruba', flag: '🇳🇬' },
-    { value: 'hausa', label: 'Hausa', flag: '🇳🇬' },
-    { value: 'igbo', label: 'Igbo', flag: '🇳🇬' },
-  ]
-
-  const levels: { value: Proficiency; label: string; description: string }[] = [
-    { value: 'beginner', label: 'Beginner', description: 'Just starting out' },
-    { value: 'intermediate', label: 'Intermediate', description: 'Can hold basic conversations' },
-    { value: 'advanced', label: 'Advanced', description: 'Fluent speaker' },
-  ]
-
-  const handleSubmit = async () => {
-    if (!language || !proficiency) return
-    
-    setLoading(true)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setError(null)
+    setLoading(true)
 
     try {
-      await updateUserProfile(language, proficiency)
-      navigate('/dashboard')
+      if (isSignUp) {
+        await signUp(email, password)
+        setError('Check your email for confirmation link!')
+      } else {
+        await signIn(email, password)
+        navigate('/onboarding')
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to save profile')
+      setError(err.message || 'Authentication failed')
     } finally {
       setLoading(false)
     }
@@ -3577,789 +4369,130 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl p-8">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome to TalkNative!
+            TalkNative
           </h1>
           <p className="text-gray-600">
-            Let's personalize your learning experience
+            Learn Nigerian languages through conversation
           </p>
         </div>
 
-        {/* Progress indicator */}
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${step >= 1 ? 'bg-blue-600' : 'bg-gray-300'}`} />
-            <div className={`w-12 h-1 ${step >= 2 ? 'bg-blue-600' : 'bg-gray-300'}`} />
-            <div className={`w-3 h-3 rounded-full ${step >= 2 ? 'bg-blue-600' : 'bg-gray-300'}`} />
-          </div>
-        </div>
-
-        {step === 1 && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-center mb-6">
-              What language do you want to learn?
-            </h2>
-            <div className="grid grid-cols-1 gap-4">
-              {languages.map((lang) => (
-                <button
-                  key={lang.value}
-                  onClick={() => setLanguage(lang.value)}
-                  className={`p-6 rounded-xl border-2 transition-all ${
-                    language === lang.value
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center space-x-4">
-                    <span className="text-4xl">{lang.flag}</span>
-                    <span className="text-xl font-semibold">{lang.label}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setStep(2)}
-              disabled={!language}
-              className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
-            >
-              Next
-            </button>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-center mb-6">
-              What's your current level?
-            </h2>
-            <div className="grid grid-cols-1 gap-4">
-              {levels.map((level) => (
-                <button
-                  key={level.value}
-                  onClick={() => setProficiency(level.value)}
-                  className={`p-6 rounded-xl border-2 transition-all text-left ${
-                    proficiency === level.value
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="font-semibold text-lg">{level.label}</div>
-                  <div className="text-gray-600 text-sm">{level.description}</div>
-                </button>
-              ))}
-            </div>
-
-            {error && (
-              <div className="p-4 rounded-lg bg-red-50 text-red-800 text-sm">
-                {error}
-              </div>
-            )}
-
-            <div className="flex space-x-4">
-              <button
-                onClick={() => setStep(1)}
-                className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={!proficiency || loading}
-                className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
-              >
-                {loading ? 'Saving...' : 'Get Started'}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-````
-
-## File: frontend/src/AppNew.tsx
-````typescript
-import { Routes, Route, Navigate } from 'react-router-dom'
-import LoginPage from './pages/LoginPage'
-import OnboardingPage from './pages/OnboardingPage'
-import DashboardPage from './pages/DashboardPage'
-import ChatPage from './pages/ChatPage'
-import RequireAuth from './components/RequireAuth'
-
-// Keep the old App as LegacyChat for backward compatibility
-import LegacyChat from './LegacyChat'
-
-export default function App() {
-  return (
-    <Routes>
-      {/* Public routes */}
-      <Route path="/login" element={<LoginPage />} />
-      
-      {/* Protected routes */}
-      <Route
-        path="/onboarding"
-        element={
-          <RequireAuth>
-            <OnboardingPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/dashboard"
-        element={
-          <RequireAuth>
-            <DashboardPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/chat/:id"
-        element={
-          <RequireAuth>
-            <ChatPage />
-          </RequireAuth>
-        }
-      />
-      
-      {/* Legacy POC route - keep for testing */}
-      <Route path="/legacy" element={<LegacyChat />} />
-      
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
-    </Routes>
-  )
-}
-````
-
-## File: frontend/src/index.css
-````css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-````
-
-## File: frontend/src/LegacyChat.tsx
-````typescript
-import { useState } from 'react';
-import { useReactMediaRecorder } from 'react-media-recorder';
-
-interface ChatResponse {
-  transcription: string;
-  correction: string | null;
-  reply: string;
-  audio: string;
-}
-
-export default function App() {
-  const [language, setLanguage] = useState<'yoruba' | 'hausa' | 'igbo'>('yoruba');
-  const [response, setResponse] = useState<ChatResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [audioPlaying, setAudioPlaying] = useState(false);
-  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
-
-  const { status, startRecording, stopRecording, mediaBlobUrl, clearBlobUrl } = useReactMediaRecorder({ 
-    audio: true 
-  });
-
-  async function sendAudio() {
-    if (!mediaBlobUrl) return;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const blob = await fetch(mediaBlobUrl).then((r) => r.blob());
-      const form = new FormData();
-      form.append('file', blob, 'audio.webm');
-
-      const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-      const res = await fetch(`${apiUrl}/api/v1/chat?language=${language}`, {
-        method: 'POST',
-        body: form,
-      });
-
-      if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
-
-      const data: ChatResponse = await res.json();
-      setResponse(data);
-
-      if (data.audio) {
-        playAudio(data.audio);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send audio');
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function playAudio(audioBase64: string) {
-    // Stop any currently playing audio
-    if (audioElement) {
-      audioElement.pause();
-      audioElement.currentTime = 0;
-    }
-
-    const audio = new Audio(`data:audio/wav;base64,${audioBase64}`);
-    setAudioElement(audio);
-    setAudioPlaying(true);
-
-    audio.onended = () => {
-      setAudioPlaying(false);
-    };
-
-    audio.onerror = () => {
-      setAudioPlaying(false);
-      setError('Failed to play audio');
-    };
-
-    audio.play().catch((err) => {
-      setAudioPlaying(false);
-      setError('Audio playback failed: ' + err.message);
-    });
-  }
-
-  function replayAudio() {
-    if (response?.audio) {
-      playAudio(response.audio);
-    }
-  }
-
-  function reset() {
-    if (audioElement) {
-      audioElement.pause();
-      audioElement.currentTime = 0;
-    }
-    clearBlobUrl();
-    setResponse(null);
-    setError(null);
-    setAudioPlaying(false);
-    setAudioElement(null);
-  }
-
-  return (
-    <div style={{ 
-      maxWidth: '800px', 
-      margin: '0 auto', 
-      padding: '40px 20px',
-      fontFamily: 'system-ui, -apple-system, sans-serif'
-    }}>
-      <h1 style={{ textAlign: 'center', marginBottom: '40px' }}>
-        TalkNative - Conversational Language Learning
-      </h1>
-
-      <div style={{ marginBottom: '30px' }}>
-        <label style={{ display: 'block', marginBottom: '10px', fontWeight: 'bold' }}>
-          Select Language:
-        </label>
-        <select 
-          value={language} 
-          onChange={(e) => setLanguage(e.target.value as any)}
-          style={{ 
-            padding: '10px', 
-            fontSize: '16px',
-            borderRadius: '8px',
-            border: '1px solid #ccc',
-            minWidth: '200px'
-          }}
-        >
-          <option value="yoruba">Yoruba</option>
-          <option value="hausa">Hausa</option>
-          <option value="igbo">Igbo</option>
-        </select>
-      </div>
-
-      <div style={{ 
-        padding: '30px', 
-        background: '#f5f5f5', 
-        borderRadius: '12px',
-        marginBottom: '30px'
-      }}>
-        <p style={{ marginBottom: '15px', color: '#666' }}>
-          Status: <strong>{status}</strong>
-        </p>
-        
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button
-            onClick={startRecording}
-            disabled={status === 'recording'}
-            style={{
-              padding: '12px 24px',
-              fontSize: '16px',
-              borderRadius: '8px',
-              border: 'none',
-              background: status === 'recording' ? '#ccc' : '#4CAF50',
-              color: 'white',
-              cursor: status === 'recording' ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            🎤 Start Recording
-          </button>
-          
-          <button
-            onClick={stopRecording}
-            disabled={status !== 'recording'}
-            style={{
-              padding: '12px 24px',
-              fontSize: '16px',
-              borderRadius: '8px',
-              border: 'none',
-              background: status !== 'recording' ? '#ccc' : '#f44336',
-              color: 'white',
-              cursor: status !== 'recording' ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            ⏹️ Stop Recording
-          </button>
-          
-          <button
-            onClick={sendAudio}
-            disabled={!mediaBlobUrl || loading}
-            style={{
-              padding: '12px 24px',
-              fontSize: '16px',
-              borderRadius: '8px',
-              border: 'none',
-              background: !mediaBlobUrl || loading ? '#ccc' : '#2196F3',
-              color: 'white',
-              cursor: !mediaBlobUrl || loading ? 'not-allowed' : 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            {loading ? '⏳ Sending...' : '📤 Send'}
-          </button>
-          
-          <button
-            onClick={reset}
-            style={{
-              padding: '12px 24px',
-              fontSize: '16px',
-              borderRadius: '8px',
-              border: '1px solid #ccc',
-              background: 'white',
-              cursor: 'pointer'
-            }}
-          >
-            🔄 Reset
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div style={{ 
-          padding: '20px', 
-          background: '#ffebee', 
-          borderRadius: '8px',
-          marginBottom: '20px',
-          color: '#c62828'
-        }}>
-          <strong>Error:</strong> {error}
-        </div>
-      )}
-
-      {response && (
-        <div style={{ 
-          padding: '30px', 
-          background: '#e3f2fd', 
-          borderRadius: '12px',
-          border: '2px solid #2196F3'
-        }}>
-          <h2 style={{ marginTop: 0, marginBottom: '20px' }}>Response</h2>
-          
-          <div style={{ marginBottom: '15px' }}>
-            <strong>Your transcription:</strong>
-            <p style={{ 
-              background: 'white', 
-              padding: '10px', 
-              borderRadius: '6px',
-              margin: '5px 0 0 0'
-            }}>
-              {response.transcription}
-            </p>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="your@email.com"
+            />
           </div>
 
-          {response.correction && (
-            <div style={{ marginBottom: '15px' }}>
-              <strong>Correction:</strong>
-              <p style={{ 
-                background: '#fff3e0', 
-                padding: '10px', 
-                borderRadius: '6px',
-                margin: '5px 0 0 0',
-                color: '#e65100'
-              }}>
-                {response.correction}
-              </p>
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="••••••••"
+            />
+          </div>
+
+          {error && (
+            <div className={`p-4 rounded-lg text-sm ${
+              error.includes('email') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+            }`}>
+              {error}
             </div>
           )}
 
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '5px' }}>
-              <strong>Tutor's reply:</strong>
-              {audioPlaying && (
-                <span style={{ 
-                  display: 'inline-flex', 
-                  alignItems: 'center', 
-                  gap: '5px',
-                  fontSize: '14px',
-                  color: '#2196F3',
-                  animation: 'pulse 1.5s ease-in-out infinite'
-                }}>
-                  🔊 Playing audio...
-                </span>
-              )}
-            </div>
-            <p style={{ 
-              background: 'white', 
-              padding: '10px', 
-              borderRadius: '6px',
-              margin: '5px 0 10px 0',
-              fontSize: '18px'
-            }}>
-              {response.reply}
-            </p>
-            <button
-              onClick={replayAudio}
-              disabled={audioPlaying}
-              style={{
-                padding: '10px 20px',
-                fontSize: '14px',
-                borderRadius: '6px',
-                border: 'none',
-                background: audioPlaying ? '#ccc' : '#2196F3',
-                color: 'white',
-                cursor: audioPlaying ? 'not-allowed' : 'pointer',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              🔊 {audioPlaying ? 'Playing...' : 'Replay Audio'}
-            </button>
-          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+          >
+            {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <button
+            onClick={() => setIsSignUp(!isSignUp)}
+            className="text-blue-600 hover:text-blue-700 font-medium"
+          >
+            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+          </button>
         </div>
-      )}
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.5;
-          }
-        }
-      `}</style>
+      </div>
     </div>
-  );
+  )
 }
 ````
 
-## File: frontend/Dockerfile
-````
-FROM node:20-alpine AS build
-WORKDIR /app
-COPY package*.json ./
-RUN npm i
-COPY . .
-RUN npm run build
+## File: frontend/src/vite-env.d.ts
+````typescript
+/// <reference types="vite/client" />
 
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 8080
-CMD ["nginx", "-g", "daemon off;"]
-````
+interface ImportMetaEnv {
+  readonly VITE_API_BASE_URL: string
+  readonly VITE_SUPABASE_URL: string
+  readonly VITE_SUPABASE_ANON_KEY: string
+}
 
-## File: frontend/Dockerfile.dev
-````
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
-EXPOSE 5173
-CMD ["npm", "run", "dev", "--", "--host"]
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
 ````
 
-## File: frontend/postcss.config.js
-````javascript
-export default {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
+## File: frontend/.gitignore
+````
+node_modules
+dist
+*.log
+.env
+.DS_Store
+````
+
+## File: frontend/index.html
+````html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TalkNative - Language Learning</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+````
+
+## File: frontend/tsconfig.node.json
+````json
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true
   },
+  "include": ["vite.config.ts"]
 }
-````
-
-## File: frontend/tailwind.config.js
-````javascript
-/** @type {import('tailwindcss').Config} */
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
-}
-````
-
-## File: .env.example
-````
-GOOGLE_API_KEY=your_google_api_key_here
-YARNGPT_API_KEY=your_yarngpt_api_key_here
-DATABASE_URL=postgresql://user:password@host:5432/dbname
-CORS_ALLOW_ORIGINS=["*"]
-
-# TTS Provider: "yarngpt" or "gemini"
-TTS_PROVIDER=yarngpt
-````
-
-## File: START_HERE.md
-````markdown
-# 🎉 Phase 2 MVP - COMPLETE!
-
-## ✅ What Was Implemented
-
-### Backend (Python/FastAPI)
-- **Authentication**: JWT token verification with Supabase
-- **Database**: New schema with Users, Conversations, Turns
-- **Scenarios**: 9 scenarios in JSON (Market, Greetings, etc.)
-- **AI Prompts**: Dynamic prompts based on scenario + proficiency
-- **History**: Maintains last 6 turns for context
-- **Storage**: Supabase Storage integration for audio files
-- **API**: 7 new endpoints for Phase 2 flow
-
-### Frontend (React/TypeScript)
-- **Authentication**: Login/Signup with Supabase
-- **Routing**: React Router with protected routes
-- **UI**: Tailwind CSS with modern design
-- **Pages**: Login, Onboarding, Dashboard, Chat
-- **Features**: Audio replay, grammar feedback, translation toggle
-
-### Documentation
-- `PHASE2_IMPLEMENTATION.md` - Technical specification
-- `PHASE2_QUICKSTART.md` - Setup guide
-- `PHASE2_STATUS.md` - Implementation checklist
-- `TODO_SUMMARY.md` - Work completed summary
-
----
-
-## 🚀 TO GET STARTED (Your Action Required)
-
-### Step 1: Create Supabase Project (5 minutes)
-1. Go to https://app.supabase.com
-2. Click "New Project"
-3. Choose a name and password
-4. Wait for project to provision
-
-### Step 2: Set Up Storage (2 minutes)
-1. Go to Storage in Supabase dashboard
-2. Create new bucket: `chat-audio`
-3. Make it **public**
-
-### Step 3: Get Credentials (1 minute)
-From Supabase Dashboard → Settings → API:
-- Copy `Project URL` 
-- Copy `anon public` key
-- Copy `service_role` key
-
-From Settings → API → JWT Settings:
-- Copy `JWT Secret`
-
-### Step 4: Create .env Files (3 minutes)
-
-**`backend/.env`**:
-```env
-GOOGLE_API_KEY=your_existing_key
-YARNGPT_API_KEY=your_existing_key
-DATABASE_URL=your_existing_db_url
-CORS_ALLOW_ORIGINS=["http://localhost:5173"]
-TTS_PROVIDER=yarngpt
-
-SUPABASE_URL=https://xxxxx.supabase.co
-SUPABASE_SERVICE_KEY=your_service_role_key_here
-SUPABASE_JWT_SECRET=your_jwt_secret_here
-SUPABASE_BUCKET_NAME=chat-audio
-```
-
-**`frontend/.env`** (create this file):
-```env
-VITE_API_BASE_URL=http://localhost:8080
-VITE_SUPABASE_URL=https://xxxxx.supabase.co
-VITE_SUPABASE_ANON_KEY=your_anon_key_here
-```
-
-### Step 5: Install Dependencies (3 minutes)
-
-**Backend**:
-```bash
-cd backend
-pip install -r requirements.txt
-```
-
-**Frontend**:
-```bash
-cd frontend
-npm install
-```
-
-### Step 6: Run Database Migration (1 minute)
-```bash
-cd backend
-alembic upgrade head
-```
-
-### Step 7: Start Development Servers (1 minute)
-```bash
-# From project root
-docker-compose -f docker-compose.dev.yml up --build
-```
-
-### Step 8: Test! (5 minutes)
-1. Open http://localhost:5173
-2. Click "Sign up"
-3. Create account with email/password
-4. Complete onboarding (choose language & level)
-5. Select a scenario from dashboard
-6. Start chatting!
-
----
-
-## 🔍 What to Expect
-
-### User Journey
-```
-Login → Onboarding → Dashboard → Chat → Conversation
-  ↓         ↓           ↓         ↓          ↓
-Email   Language    Scenarios  Record   AI responds
-       Proficiency              Audio    with audio
-```
-
-### Key Features Working
-✅ User authentication and session management
-✅ Personalized onboarding flow
-✅ Scenario-based conversation selection
-✅ Audio recording and playback
-✅ AI grammar feedback
-✅ Conversation history (remembers context)
-✅ Audio storage in Supabase
-✅ Grammar correction badges
-✅ Modern, responsive UI
-
----
-
-## 🐛 Troubleshooting
-
-### "Missing Supabase environment variables"
-→ Make sure you created both `.env` files with correct values
-
-### "Failed to upload audio"
-→ Check that `chat-audio` bucket exists and is public in Supabase
-
-### "Invalid authentication token"
-→ Verify `SUPABASE_JWT_SECRET` matches your project's JWT secret
-
-### Frontend won't build
-→ Delete `node_modules` and run `npm install` again
-
-### Backend migration fails
-→ Check your `DATABASE_URL` is correct and PostgreSQL is running
-
----
-
-## 📁 Project Structure
-
-```
-talknative-backend/
-├── backend/
-│   ├── app/
-│   │   ├── ai/              # Pydantic AI agents
-│   │   ├── api/v1/          # API endpoints
-│   │   ├── core/            # Auth, config, storage
-│   │   ├── data/            # scenarios.json
-│   │   ├── models/          # SQLAlchemy models
-│   │   └── tts/             # TTS providers
-│   └── alembic/versions/    # Database migrations
-├── frontend/
-│   └── src/
-│       ├── pages/           # Login, Onboarding, Dashboard, Chat
-│       ├── contexts/        # Auth context
-│       ├── lib/             # API client, Supabase
-│       └── components/      # RequireAuth guard
-└── docs/                    # All the .md files
-
-```
-
----
-
-## 🎯 Success Criteria
-
-Phase 2 is working when you can:
-1. ✅ Sign up and log in
-2. ✅ Complete onboarding
-3. ✅ See scenarios filtered by your language
-4. ✅ Start a conversation
-5. ✅ Record audio and get AI response with audio
-6. ✅ See grammar feedback
-7. ✅ Continue multi-turn conversations
-8. ✅ Audio plays from Supabase Storage
-
----
-
-## 📞 Need Help?
-
-Check these files:
-- **Setup**: `PHASE2_QUICKSTART.md`
-- **Architecture**: `PHASE2_IMPLEMENTATION.md`
-- **Status**: `PHASE2_STATUS.md`
-
-Look at the terminal logs:
-```bash
-docker-compose -f docker-compose.dev.yml logs -f backend
-docker-compose -f docker-compose.dev.yml logs -f frontend
-```
-
----
-
-## 🚢 Deployment (After Local Testing Works)
-
-1. Add Supabase secrets to GitHub repository
-2. Update `.github/workflows/deploy.yml` with Supabase env vars
-3. Configure Cloud Run environment variables
-4. Deploy!
-
-See `PHASE2_IMPLEMENTATION.md` section "Deployment Updates Needed" for details.
-
----
-
-**Estimated Setup Time**: ~15 minutes  
-**Your Action Required**: Complete Steps 1-8 above  
-**Then**: Everything should work! 🎉
-
----
-
-*All code is implemented and ready to run. You just need to configure Supabase and start the servers!*
 ````
 
 ## File: backend/alembic/versions/002_phase2_schema.py
@@ -4456,230 +4589,227 @@ def downgrade() -> None:
     op.create_index(op.f('ix_conversations_id'), 'conversations', ['id'], unique=False)
 ````
 
-## File: backend/alembic/env.py
+## File: backend/app/ai/agent.py
 ````python
-from logging.config import fileConfig
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
-from alembic import context
-import sys
-from pathlib import Path
+from pydantic import BaseModel, Field
+from pydantic_ai import Agent
+from app.core.config import settings
 
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+class ConversationTurn(BaseModel):
+    user_transcription: str = Field(description="Exact transcription of what the user said")
+    grammar_is_correct: bool = Field(description="True if the user's grammar was perfect")
+    correction_feedback: str | None = Field(description="English feedback if grammar was wrong")
+    reply_text_local: str = Field(description="The response in Igbo/Hausa/Yoruba")
+    reply_text_english: str = Field(description="English translation of the response")
+    sentiment_score: float = Field(description="My emotional reaction to the user's input, from -1.0 (impatient/angry) to 1.0 (very pleased/encouraging).")
+    current_price: int | None = Field(description="For market scenarios only: the current price offered by the seller. If not a market scenario return null.")
+    reply_text_local: str = Field(description="The response. if cultural_flag is True, this hsould be an angry/shocked reaction.")
+    cultural_flag: bool = Field(description="Set to True if user was culturally rude (e.g. greeting elder casually, refusing food rudely).")
+    cultural_feedback: str | None = Field(description="If flag is True, explain the cultural mistake (e.g 'You must kneel for elders'). ")
 
+SYSTEM_PROMPTS = {
+    "yoruba": (
+        "You are a native Yoruba language tutor helping learners master this tonal language. "
+        "FOCUS AREAS: "
+        "- Tone accuracy (high/mid/low tones) - tones change word meanings "
+        "- Proper use of vowel harmony (oral vs nasal vowels) "
+        "- Culturally appropriate greetings based on time/context "
+        "- Correct verb serialization patterns "
+        "\n"
+        "COMMON LEARNER MISTAKES: "
+        "- Incorrect tone patterns (e.g., 'ọmọ' child vs 'ọmọ́' offspring) "
+        "- Missing or wrong diacritics "
+        "- Improper verb ordering in serial constructions "
+        "- Wrong vowel harmony in compound words "
+        "\n"
+        "You will receive audio from a learner speaking Yoruba. "
+        "1. Transcribe EXACTLY what they said with proper tone marks (á, à, ā, é, è, etc.) "
+        "2. If they made mistakes, explain briefly in English focusing on tones, vowels, or grammar "
+        "3. Continue the conversation naturally in Yoruba, demonstrating correct usage "
+        "4. Use appropriate cultural expressions and greetings "
+        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if they are rude, my score will be negative)."
+    ),
+    "hausa": (
+        "You are a native Hausa language tutor helping learners master this important West African language. "
+        "FOCUS AREAS: "
+        "- Grammatical gender (masculine/feminine) and agreement "
+        "- Grade system (verb modifications showing direction/voice) "
+        "- Proper use of aspect markers (continuative, completive, future) "
+        "- Correct usage of pronouns and possessives "
+        "\n"
+        "COMMON LEARNER MISTAKES: "
+        "- Gender agreement errors (adjectives/verbs not matching noun gender) "
+        "- Grade confusion (using wrong verb grade for context) "
+        "- Aspect marker misuse (na/ina/za confusion) "
+        "- Incorrect pronoun forms for gender "
+        "\n"
+        "You will receive audio from a learner speaking Hausa. "
+        "1. Transcribe EXACTLY what they said (use proper Hausa orthography) "
+        "2. If they made mistakes, explain briefly in English focusing on gender, grades, or aspects "
+        "3. Continue the conversation naturally in Hausa, demonstrating correct usage "
+        "4. Use culturally appropriate Islamic greetings when relevant (Salam alaikum, etc.)"
+        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if they are polite, my score will be positive)."
+    ),
+    "igbo": (
+        "You are a native Igbo language tutor helping learners master this complex tonal language. "
+        "FOCUS AREAS: "
+        "- Tone patterns (high/low/downstep) - crucial for meaning "
+        "- Vowel harmony rules (must follow throughout words) "
+        "- Serial verb constructions (multiple verbs in sequence) "
+        "- Proper use of noun class prefixes "
+        "\n"
+        "COMMON LEARNER MISTAKES: "
+        "- Tone errors causing meaning changes "
+        "- Vowel harmony violations (mixing incompatible vowels) "
+        "- Wrong verb ordering in serial constructions "
+        "- Incorrect or missing noun class markers "
+        "- Improper use of stative verbs "
+        "\n"
+        "You will receive audio from a learner speaking Igbo. "
+        "1. Transcribe EXACTLY what they said with proper tone marks (á, à, ọ́, ọ̀, etc.) "
+        "2. If they made mistakes, explain briefly in English focusing on tones, vowel harmony, or verb patterns "
+        "3. Continue the conversation naturally in Igbo, demonstrating correct usage "
+        "4. Use community-oriented expressions and appropriate proverbs when relevant"
+        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if their grammar is very poor, my score will be low)."
+    )
+}
+
+def get_agent(language: str) -> Agent:
+    system_prompt = SYSTEM_PROMPTS.get(language, SYSTEM_PROMPTS["yoruba"])
+    
+    return Agent(
+        'google-gla:gemini-2.5-flash',
+        output_type=ConversationTurn,
+        system_prompt=system_prompt,
+    )
+
+# Backward compatibility: default agent for Yoruba
+agent = get_agent("yoruba")
+````
+
+## File: backend/app/models/conversation.py
+````python
+from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, func
+from sqlalchemy.orm import relationship
 from app.db.base import Base
-from app.core.config import settings
-from app.models.conversation import Conversation
-from app.models.turn import Turn
-from app.models.user import Profile
 
-config = context.config
+class Conversation(Base):
+    __tablename__ = "conversations"
 
-# Ensure DATABASE_URL uses the correct driver for psycopg3
-database_url = settings.DATABASE_URL
-if database_url.startswith("postgresql://"):
-    database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
-
-config.set_main_option("sqlalchemy.url", database_url)
-
-if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
-
-target_metadata = Base.metadata
-
-def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
-    context.configure(
-        url=url,
-        target_metadata=target_metadata,
-        literal_binds=True,
-        dialect_opts={"paramstyle": "named"},
-    )
-
-    with context.begin_transaction():
-        context.run_migrations()
-
-def run_migrations_online() -> None:
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
-
-    with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
-
-        with context.begin_transaction():
-            context.run_migrations()
-
-if context.is_offline_mode():
-    run_migrations_offline()
-else:
-    run_migrations_online()
+    id = Column(String, primary_key=True, index=True)  # UUID
+    user_id = Column(String, ForeignKey("profiles.id"), nullable=False, index=True)
+    scenario_id = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    active = Column(Boolean, default=True, nullable=False)
+    
+    # Relationships
+    turns = relationship("Turn", back_populates="conversation", cascade="all, delete-orphan")
 ````
 
-## File: backend/app/api/v1/users.py
+## File: backend/app/models/schemas.py
 ````python
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from app.core.auth import get_current_user, CurrentUser
-from app.db.session import get_db
-from app.models.user import Profile
-from app.models.schemas import UserProfileUpdate, UserProfileResponse
+from pydantic import BaseModel, EmailStr
+from typing import Optional, Literal
+from datetime import datetime
 
-router = APIRouter(tags=["users"])
+# Enums
+LanguageType = Literal["yoruba", "hausa", "igbo"]
+ProficiencyType = Literal["beginner", "intermediate", "advanced"]
+DifficultyType = Literal["beginner", "intermediate", "advanced"]
 
-@router.post("/profile", response_model=UserProfileResponse)
-async def update_user_profile(
-    profile: UserProfileUpdate,
-    current_user: CurrentUser = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Update user profile with target language and proficiency level.
-    Called during onboarding.
-    """
-    user = db.query(Profile).filter(Profile.id == current_user.id).first()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    # Update user profile
-    user.target_language = profile.target_language
-    user.proficiency_level = profile.proficiency_level
-    
-    db.commit()
-    db.refresh(user)
-    
-    return user
+# User schemas
+class UserProfileUpdate(BaseModel):
+    target_language: LanguageType
+    proficiency_level: ProficiencyType
 
-@router.get("/profile", response_model=UserProfileResponse)
-async def get_user_profile(
-    current_user: CurrentUser = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get current user's profile."""
-    user = db.query(Profile).filter(Profile.id == current_user.id).first()
-    
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    return user
-````
+class UserProfileResponse(BaseModel):
+    id: str
+    email: str
+    target_language: Optional[LanguageType]
+    proficiency_level: Optional[ProficiencyType]
+    created_at: datetime
 
-## File: backend/app/core/auth.py
-````python
-import jwt
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from app.core.config import settings
-from app.db.session import get_db
-from app.models.user import Profile
+    class Config:
+        from_attributes = True
 
-security = HTTPBearer()
+# Scenario schemas
+class ScenarioRoles(BaseModel):
+    user: str
+    ai: str
 
-class CurrentUser:
-    """Current authenticated user context."""
-    def __init__(self, user: Profile):
-        self.user = user
-        self.id = user.id
-        self.email = user.email
-        self.target_language = user.target_language
-        self.proficiency_level = user.proficiency_level
+class ScenarioMission(BaseModel):
+    objective: str
+    success_condition: str
 
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: Session = Depends(get_db)
-) -> CurrentUser:
-    """
-    Verify JWT token from Supabase and return current user.
-    
-    Raises:
-        HTTPException: 401 if token is invalid or user not found.
-    """
-    token = credentials.credentials
-    
-    try:
-        # Decode JWT using Supabase JWT secret
-        payload = jwt.decode(
-            token,
-            settings.SUPABASE_JWT_SECRET,
-            algorithms=["HS256"],
-            audience="authenticated"
-        )
-        
-        user_id: str = payload.get("sub")
-        email: str = payload.get("email")
-        
-        if not user_id or not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication token"
-            )
-        
-        # Get or create user in our database
-        user = db.query(Profile).filter(Profile.id == user_id).first()
-        
-        if not user:
-            # Create user if doesn't exist (first login)
-            user = Profile(id=user_id, email=email)
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        
-        return CurrentUser(user)
-        
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired"
-        )
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Authentication failed: {str(e)}"
-        )
-````
+class KeyVocabulary(BaseModel):
+    word: str
+    meaning: str
 
-## File: backend/app/core/config.py
-````python
-from pydantic_settings import BaseSettings
-from typing import Literal
+class HaggleSettings(BaseModel):
+    start_price: int
+    target_price: int
+    reserve_price: int
 
-class Settings(BaseSettings):
-    GOOGLE_API_KEY: str
-    YARNGPT_API_KEY: str
-    DATABASE_URL: str
-    CORS_ALLOW_ORIGINS: list[str] = ["*"]
-    
-    TTS_PROVIDER: Literal["yarngpt", "gemini"] = "yarngpt"
-    
-    # Supabase configuration
-    SUPABASE_URL: str
-    SUPABASE_SERVICE_KEY: str
-    SUPABASE_JWT_SECRET: str
-    SUPABASE_BUCKET_NAME: str = "chat-audio"
+class ScenarioResponse(BaseModel):
+    id: str
+    language: LanguageType
+    category: Optional[str] = None
+    title: str
+    difficulty: DifficultyType
+    description: Optional[str] = None
+    roles: Optional[ScenarioRoles] = None
+    mission: Optional[ScenarioMission] = None
+    key_vocabulary: Optional[list[KeyVocabulary]] = None
+    system_prompt_context: Optional[str] = None
+    haggle_settings: Optional[HaggleSettings] = None
 
-    model_config = {
-        "env_file": ".env",
-        "extra": "ignore",
-    }
+# Conversation schemas
+class ConversationStartRequest(BaseModel):
+    scenario_id: str
 
-settings = Settings()
+class ConversationStartResponse(BaseModel):
+    conversation_id: str
+    initial_ai_greeting: Optional[str] = None
+    initial_ai_audio_url: Optional[str] = None
+
+# Turn schemas
+class TurnResponse(BaseModel):
+    turn_number: int
+    transcription: str
+    ai_text: str
+    ai_text_english: Optional[str]
+    ai_audio_url: str
+    correction: Optional[str]
+    grammar_score: Optional[int]
+    sentiment_score: Optional[float] = None
+    negotiated_price: Optional[int] = None
+
+# Conversation history schemas
+class ConversationHistoryResponse(BaseModel):
+    conversation_id: str
+    scenario_title: str
+    scenario_id: str
+    created_at: datetime
+    turn_count: int
+    last_message: Optional[str]
+    active: bool
+
+# Vocabulary schemas
+class SaveWordRequest(BaseModel):
+    word: str
+    translation: str
+    context_sentence: Optional[str] = None
+
+class SavedWordResponse(BaseModel):
+    id: int
+    word: str
+    translation: str
+    context_sentence: Optional[str]
+    language: LanguageType
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 ````
 
 ## File: backend/app/models/turn.py
@@ -4716,58 +4846,6 @@ class Turn(Base):
     conversation = relationship("Conversation", back_populates="turns")
 ````
 
-## File: backend/app/models/user.py
-````python
-import enum
-from sqlalchemy import Column, String, DateTime, Enum as SQLEnum, func
-from app.db.base import Base
-
-class LanguageEnum(str, enum.Enum):
-    yoruba = "yoruba"
-    hausa = "hausa"
-    igbo = "igbo"
-
-class ProficiencyEnum(str, enum.Enum):
-    beginner = "beginner"
-    intermediate = "intermediate"
-    advanced = "advanced"
-
-class Profile(Base):
-    __tablename__ = "profiles"
-
-    id = Column(String, primary_key=True, index=True)  # Supabase Auth UUID
-    email = Column(String, unique=True, index=True, nullable=False)
-    target_language = Column(SQLEnum(LanguageEnum), nullable=True)
-    proficiency_level = Column(SQLEnum(ProficiencyEnum), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-````
-
-## File: backend/app/tts/yarngpt_provider.py
-````python
-import httpx
-from app.core.config import settings
-
-VOICE_MAP = {
-    "yoruba": "idera",
-    "hausa": "zainab",
-    "igbo": "adaora",
-}
-
-async def synthesize_speech(text: str, language: str) -> bytes:
-    voice_id = VOICE_MAP.get(language, "idera")
-    try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.post(
-                "https://yarngpt.ai/api/v1/tts",
-                headers={"Authorization": f"Bearer {settings.YARNGPT_API_KEY}"},
-                json={"text": text, "voice_id": voice_id, "language": language},
-            )
-            r.raise_for_status()
-            return r.content
-    except Exception:
-        return b""
-````
-
 ## File: backend/app/main.py
 ````python
 from fastapi import FastAPI
@@ -4778,6 +4856,7 @@ from app.api.v1.users import router as users_router
 from app.api.v1.scenarios import router as scenarios_router
 from app.api.v1.conversations import router as conversations_router
 from app.api.v1.vocabulary import router as vocabulary_router
+from app.api.v1.game import router as game_router
 
 app = FastAPI(title="TalkNative API", version="2.0")
 
@@ -4799,22 +4878,7 @@ app.include_router(users_router, prefix="/api/v1/user")
 app.include_router(scenarios_router, prefix="/api/v1/scenarios")
 app.include_router(conversations_router, prefix="/api/v1/chat")
 app.include_router(vocabulary_router, prefix="/api/v1/vocabulary")
-````
-
-## File: backend/requirements.txt
-````
-fastapi==0.122.0
-uvicorn[standard]==0.38.0
-httpx==0.28.1
-pydantic==2.12.5
-pydantic-settings==2.12.0
-pydantic-ai==1.25.1
-python-multipart==0.0.20
-sqlalchemy==2.0.44
-alembic==1.17.2
-psycopg[binary]==3.2.13
-pyjwt==2.10.1
-supabase==2.24.0
+app.include_router(game_router, prefix="/api/v1/game")
 ````
 
 ## File: frontend/src/pages/ChatPage.tsx
@@ -5371,200 +5435,15 @@ export default function ChatPage() {
 }
 ````
 
-## File: frontend/src/pages/LoginPage.tsx
-````typescript
-import { useState } from 'react'
-import { useNavigate} from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
-
-export default function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [isSignUp, setIsSignUp] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  
-  const { signIn, signUp } = useAuth()
-  const navigate = useNavigate()
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setLoading(true)
-
-    try {
-      if (isSignUp) {
-        await signUp(email, password)
-        setError('Check your email for confirmation link!')
-      } else {
-        await signIn(email, password)
-        navigate('/onboarding')
-      }
-    } catch (err: any) {
-      setError(err.message || 'Authentication failed')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            TalkNative
-          </h1>
-          <p className="text-gray-600">
-            Learn Nigerian languages through conversation
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="your@email.com"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="••••••••"
-            />
-          </div>
-
-          {error && (
-            <div className={`p-4 rounded-lg text-sm ${
-              error.includes('email') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-            }`}>
-              {error}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
-          >
-            {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-blue-600 hover:text-blue-700 font-medium"
-          >
-            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-````
-
-## File: frontend/src/vite-env.d.ts
-````typescript
-/// <reference types="vite/client" />
-
-interface ImportMetaEnv {
-  readonly VITE_API_BASE_URL: string
-  readonly VITE_SUPABASE_URL: string
-  readonly VITE_SUPABASE_ANON_KEY: string
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
-````
-
-## File: frontend/.gitignore
-````
-node_modules
-dist
-*.log
-.env
-.DS_Store
-````
-
-## File: frontend/index.html
-````html
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TalkNative - Language Learning</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
-````
-
-## File: frontend/tsconfig.node.json
-````json
-{
-  "compilerOptions": {
-    "composite": true,
-    "skipLibCheck": true,
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true
-  },
-  "include": ["vite.config.ts"]
-}
-````
-
-## File: backend/app/models/conversation.py
-````python
-from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, func
-from sqlalchemy.orm import relationship
-from app.db.base import Base
-
-class Conversation(Base):
-    __tablename__ = "conversations"
-
-    id = Column(String, primary_key=True, index=True)  # UUID
-    user_id = Column(String, ForeignKey("profiles.id"), nullable=False, index=True)
-    scenario_id = Column(String, nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    active = Column(Boolean, default=True, nullable=False)
-    
-    # Relationships
-    turns = relationship("Turn", back_populates="conversation", cascade="all, delete-orphan")
-````
-
-## File: frontend/src/App.tsx
+## File: frontend/src/AppNew.tsx
 ````typescript
 import { Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import OnboardingPage from './pages/OnboardingPage'
-import DashboardPage from './pages/DashboardPage'
 import ChatPage from './pages/ChatPage'
 import RequireAuth from './components/RequireAuth'
-
-// Keep the old App as LegacyChat for backward compatibility
-import LegacyChat from './LegacyChat'
+import MapDashboard from './pages/MapDashboard'
+import WisdomDeckPage from './pages/WisdomDeckPage'
 
 export default function App() {
   return (
@@ -5585,7 +5464,15 @@ export default function App() {
         path="/dashboard"
         element={
           <RequireAuth>
-            <DashboardPage />
+            <MapDashboard />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/wisdom"
+        element={
+          <RequireAuth>
+            <WisdomDeckPage />
           </RequireAuth>
         }
       />
@@ -5598,34 +5485,11 @@ export default function App() {
         }
       />
       
-      {/* Legacy POC route - keep for testing */}
-      <Route path="/legacy" element={<LegacyChat />} />
-      
       {/* Default redirect */}
       <Route path="/" element={<Navigate to="/login" replace />} />
     </Routes>
   )
 }
-````
-
-## File: frontend/src/main.tsx
-````typescript
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
-import App from './App'
-import { AuthProvider } from './contexts/AuthContext'
-import './index.css'
-
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-    <App />
-      </AuthProvider>
-    </BrowserRouter>
-  </React.StrictMode>,
-)
 ````
 
 ## File: frontend/tsconfig.json
@@ -5756,6 +5620,74 @@ services:
       - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
     depends_on:
       - backend
+````
+
+## File: frontend/src/App.tsx
+````typescript
+import { Routes, Route, Navigate } from 'react-router-dom'
+import LoginPage from './pages/LoginPage'
+import OnboardingPage from './pages/OnboardingPage'
+import DashboardPage from './pages/DashboardPage'
+import ChatPage from './pages/ChatPage'
+import RequireAuth from './components/RequireAuth'
+
+export default function App() {
+  return (
+    <Routes>
+      {/* Public routes */}
+      <Route path="/login" element={<LoginPage />} />
+      
+      {/* Protected routes */}
+      <Route
+        path="/onboarding"
+        element={
+          <RequireAuth>
+            <OnboardingPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/dashboard"
+        element={
+          <RequireAuth>
+            <DashboardPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/chat/:id"
+        element={
+          <RequireAuth>
+            <ChatPage />
+          </RequireAuth>
+        }
+      />
+      
+      {/* Default redirect */}
+      <Route path="/" element={<Navigate to="/login" replace />} />
+    </Routes>
+  )
+}
+````
+
+## File: frontend/src/main.tsx
+````typescript
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
+import App from './App'
+import { AuthProvider } from './contexts/AuthContext'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <AuthProvider>
+    <App />
+      </AuthProvider>
+    </BrowserRouter>
+  </React.StrictMode>,
+)
 ````
 
 ## File: frontend/package.json

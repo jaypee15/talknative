@@ -81,11 +81,12 @@ SYSTEM_PROMPTS = {
     )
 }
 
-def get_agent(language: str) -> Agent:
+def get_agent(language: str, model_name: str | None = None) -> Agent:
     system_prompt = SYSTEM_PROMPTS.get(language, SYSTEM_PROMPTS["yoruba"])
+    model = model_name or 'google-gla:gemini-2.5-flash-lite'
     
     return Agent(
-        'google-gla:gemini-2.5-flash',
+        model,
         output_type=ConversationTurn,
         system_prompt=system_prompt,
     )

@@ -1,9 +1,11 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+import base64
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import Optional, List
 from pydantic_ai import BinaryContent
+from pydantic_ai.exceptions import ModelHTTPError
 
 from app.core.auth import get_current_user, CurrentUser
 from app.core.storage import storage_manager
@@ -17,6 +19,65 @@ from app.ai.prompt_builder import build_system_prompt
 from app.tts import synthesize_speech
 
 router = APIRouter(tags=["conversations"])
+
+async def process_turn_persistence(
+    db: Session,
+    user_id: str,
+    conversation_id: str,
+    turn_number: int,
+    user_audio_bytes: bytes,
+    ai_audio_bytes: bytes,
+    ai_data: any # The result.output object
+):
+    """
+    Handles the slow stuff: Uploading to Supabase and Saving to Postgres.
+    """
+    try:
+        # 1. Upload User Audio
+        user_audio_url = await storage_manager.upload_audio(
+            audio_data=user_audio_bytes,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            turn_number=turn_number,
+            file_type="user"
+        )
+        
+        # 2. Upload AI Audio
+        ai_audio_url = await storage_manager.upload_audio(
+            audio_data=ai_audio_bytes,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            turn_number=turn_number,
+            file_type="ai"
+        )
+
+        # 3. Calculate Scores
+        grammar_score = 10 if ai_data.grammar_is_correct else 5
+
+        # 4. Save to DB
+        turn = Turn(
+            conversation_id=conversation_id,
+            turn_number=turn_number,
+            user_audio_url=user_audio_url,
+            user_transcription=ai_data.user_transcription,
+            ai_response_text=ai_data.reply_text_local,
+            ai_response_text_english=ai_data.reply_text_english,
+            ai_response_audio_url=ai_audio_url,
+            grammar_correction=ai_data.correction_feedback,
+            grammar_score=grammar_score,
+            sentiment_score=ai_data.sentiment_score,
+            negotiated_price=ai_data.current_price,
+            cultural_flag=ai_data.cultural_flag,
+            cultural_feedback=ai_data.cultural_feedback
+        )
+        
+        db.add(turn)
+        db.commit()
+        print(f"✅ Background task complete for Turn {turn_number}")
+        
+    except Exception as e:
+        print(f"❌ Background Persistence Error: {e}")
+        
 
 @router.post("/start", response_model=ConversationStartResponse)
 async def start_conversation(
@@ -74,6 +135,7 @@ async def start_conversation(
 @router.post("/{conversation_id}/turn", response_model=TurnResponse)
 async def create_turn(
     conversation_id: str,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -88,27 +150,15 @@ async def create_turn(
         Conversation.user_id == current_user.id
     ).first()
     
-    if not conversation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conversation not found"
-        )
-    
-    if not conversation.active:
+    if not conversation or not conversation.active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Conversation is not active"
+            detail="Invalid Conversation"
         )
     
     # Get scenario details
     loader = get_scenario_loader()
     scenario = loader.get_scenario(conversation.scenario_id)
-    
-    if not scenario:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Scenario configuration not found"
-        )
     
     # Read audio file
     audio_bytes = await file.read()
@@ -121,7 +171,6 @@ async def create_turn(
     
     previous_turns.reverse()  # Chronological order
     
-    # Build message history for Pydantic AI
     message_history = []
     for turn in previous_turns:
         message_history.append(f"User: {turn.user_transcription}")
@@ -135,75 +184,69 @@ async def create_turn(
         scenario_data=scenario  # Pass full scenario for mission-based prompts
     )
     
-    # Get language-specific agent with dynamic prompt
-    agent = get_agent(current_user.target_language)
+    agent = get_agent(current_user.target_language, 'google-gla:gemini-2.5-flash-lite')
     
-    # Create BinaryContent for audio
-    audio_content = BinaryContent(data=audio_bytes, media_type=mime_type)
-    
-    # Run AI agent with history and scenario context
-    messages = [system_prompt] + message_history + [
-        f"The user is speaking {current_user.target_language}. Respond in {current_user.target_language}.",
-        audio_content
-    ]
-    
-    result = await agent.run(messages)
+    try:
+        result = await agent.run(
+            [system_prompt] + message_history + [
+                f"The user is speaking {current_user.target_language}.",
+                BinaryContent(data=audio_bytes, media_type=mime_type)
+            ]
+        )
+    except ModelHTTPError as e:
+        if e.status_code == 503:
+            print("fallback")
+            fallback_agent = get_agent(
+                current_user.target_language,
+                model_name="google-gla:gemini-2.5-flash",
+            )
+            result = await fallback_agent.run(
+                [system_prompt] + message_history + [
+                    f"The user is speaking {current_user.target_language}.",
+                    BinaryContent(data=audio_bytes, media_type=mime_type)
+                ]
+            )
+        else:
+            raise
     data = result.output
     
-    # Generate TTS for AI response
+    # Run TTS (The second necessary bottleneck)
     ai_audio_bytes = await synthesize_speech(
         text=data.reply_text_local,
         language=current_user.target_language
     )
     
-    # Calculate turn number
-    turn_number = len(previous_turns) + 1
+    # 6. RETURN IMMEDIATELY (Skip Storage)
     
-    # Upload audios to Supabase Storage
-    user_audio_url = await storage_manager.upload_audio(
-        audio_data=audio_bytes,
-        user_id=current_user.id,
-        conversation_id=conversation_id,
-        turn_number=turn_number,
-        file_type="user"
+    # Convert audio to Data URI for immediate playback on frontend
+    # This avoids the frontend needing to download from Supabase
+    b64_audio = base64.b64encode(ai_audio_bytes).decode('utf-8')
+    audio_data_uri = f"data:audio/mpeg;base64,{b64_audio}"
+    
+    next_turn_number = len(previous_turns) + 1
+    
+    # 7. Offload Storage to Background
+    background_tasks.add_task(
+        process_turn_persistence,
+        db, # NOTE: FastAPI manages this session, might need a fresh one if high concurrency
+        current_user.id,
+        conversation_id,
+        next_turn_number,
+        audio_bytes,
+        ai_audio_bytes,
+        data
     )
-    
-    ai_audio_url = await storage_manager.upload_audio(
-        audio_data=ai_audio_bytes,
-        user_id=current_user.id,
-        conversation_id=conversation_id,
-        turn_number=turn_number,
-        file_type="ai"
-    )
-    
-    # Calculate grammar score (simple: 10 if correct, 5 if has correction)
-    grammar_score = 10 if data.grammar_is_correct else 5
-    
-    # Save turn to database
-    turn = Turn(
-        conversation_id=conversation_id,
-        turn_number=turn_number,
-        user_audio_url=user_audio_url,
-        user_transcription=data.user_transcription,
-        ai_response_text=data.reply_text_local,
-        ai_response_text_english=data.reply_text_english,
-        ai_response_audio_url=ai_audio_url,
-        grammar_correction=data.correction_feedback,
-        grammar_score=grammar_score
-    )
-    
-    db.add(turn)
-    db.commit()
-    db.refresh(turn)
     
     return TurnResponse(
-        turn_number=turn_number,
+        turn_number=next_turn_number,
         transcription=data.user_transcription,
         ai_text=data.reply_text_local,
         ai_text_english=data.reply_text_english,
-        ai_audio_url=ai_audio_url or "",
+        ai_audio_url=audio_data_uri, # Frontend plays this instantly
         correction=data.correction_feedback,
-        grammar_score=grammar_score
+        grammar_score=10 if data.grammar_is_correct else 5,
+        sentiment_score=data.sentiment_score,
+        negotiated_price=data.current_price
     )
 
 @router.get("/history", response_model=List[ConversationHistoryResponse])
