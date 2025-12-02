@@ -4,6 +4,8 @@ import OnboardingPage from './pages/OnboardingPage'
 import DashboardPage from './pages/DashboardPage'
 import ChatPage from './pages/ChatPage'
 import RequireAuth from './components/RequireAuth'
+import MapDashboard from './pages/MapDashboard'
+import WisdomDeckPage from './pages/WisdomDeckPage'
 
 // Keep the old App as LegacyChat for backward compatibility
 import LegacyChat from './LegacyChat'
@@ -27,9 +29,17 @@ export default function App() {
         path="/dashboard"
         element={
           <RequireAuth>
-            <DashboardPage />
+            <MapDashboard />
           </RequireAuth>
         }
+      />
+      <Route
+      path='=/wisdom'
+      element={
+        <RequireAuth>
+          <WisdomDeckPage />
+        </RequireAuth>
+      }
       />
       <Route
         path="/chat/:id"

@@ -8,6 +8,11 @@ class ConversationTurn(BaseModel):
     correction_feedback: str | None = Field(description="English feedback if grammar was wrong")
     reply_text_local: str = Field(description="The response in Igbo/Hausa/Yoruba")
     reply_text_english: str = Field(description="English translation of the response")
+    sentiment_score: float = Field(description="My emotional reaction to the user's input, from -1.0 (impatient/angry) to 1.0 (very pleased/encouraging).")
+    current_price: int | None = Field(description="For market scenarios only: the current price offered by the seller. If not a market scenario return null.")
+    reply_text_local: str = Field(description="The response. if cultural_flag is True, this hsould be an angry/shocked reaction.")
+    cultural_flag: bool = Field(description="Set to True if user was culturally rude (e.g. greeting elder casually, refusing food rudely).")
+    cultral_feedback: str | None = Field(description="If flag is True, explain the cultural mistake (e.g 'You must kneel for elders'). ")
 
 SYSTEM_PROMPTS = {
     "yoruba": (
@@ -28,7 +33,8 @@ SYSTEM_PROMPTS = {
         "1. Transcribe EXACTLY what they said with proper tone marks (á, à, ā, é, è, etc.) "
         "2. If they made mistakes, explain briefly in English focusing on tones, vowels, or grammar "
         "3. Continue the conversation naturally in Yoruba, demonstrating correct usage "
-        "4. Use appropriate cultural expressions and greetings"
+        "4. Use appropriate cultural expressions and greetings "
+        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if they are rude, my score will be negative)."
     ),
     "hausa": (
         "You are a native Hausa language tutor helping learners master this important West African language. "
@@ -49,6 +55,7 @@ SYSTEM_PROMPTS = {
         "2. If they made mistakes, explain briefly in English focusing on gender, grades, or aspects "
         "3. Continue the conversation naturally in Hausa, demonstrating correct usage "
         "4. Use culturally appropriate Islamic greetings when relevant (Salam alaikum, etc.)"
+        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if they are polite, my score will be positive)."
     ),
     "igbo": (
         "You are a native Igbo language tutor helping learners master this complex tonal language. "
@@ -70,6 +77,7 @@ SYSTEM_PROMPTS = {
         "2. If they made mistakes, explain briefly in English focusing on tones, vowel harmony, or verb patterns "
         "3. Continue the conversation naturally in Igbo, demonstrating correct usage "
         "4. Use community-oriented expressions and appropriate proverbs when relevant"
+        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if their grammar is very poor, my score will be low)."
     )
 }
 

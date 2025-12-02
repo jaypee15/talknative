@@ -2,7 +2,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
-from typing import Optional
+from typing import Optional, List
 from pydantic_ai import BinaryContent
 
 from app.core.auth import get_current_user, CurrentUser
@@ -11,7 +11,7 @@ from app.db.session import get_db
 from app.data.scenario_loader import get_scenario_loader
 from app.models.conversation import Conversation
 from app.models.turn import Turn
-from app.models.schemas import ConversationStartRequest, ConversationStartResponse, TurnResponse
+from app.models.schemas import ConversationStartRequest, ConversationStartResponse, TurnResponse, ConversationHistoryResponse
 from app.ai.agent import get_agent
 from app.ai.prompt_builder import build_system_prompt
 from app.tts import synthesize_speech
@@ -127,11 +127,12 @@ async def create_turn(
         message_history.append(f"User: {turn.user_transcription}")
         message_history.append(f"Assistant: {turn.ai_response_text}")
     
-    # Build dynamic system prompt
+    # Build dynamic system prompt with full scenario data
     system_prompt = build_system_prompt(
         language=current_user.target_language,
-        scenario_prompt=scenario['system_prompt'],
-        proficiency_level=current_user.proficiency_level
+        scenario_prompt=scenario.get('system_prompt_context', scenario.get('system_prompt', '')),
+        proficiency_level=current_user.proficiency_level,
+        scenario_data=scenario  # Pass full scenario for mission-based prompts
     )
     
     # Get language-specific agent with dynamic prompt
@@ -185,6 +186,7 @@ async def create_turn(
         user_audio_url=user_audio_url,
         user_transcription=data.user_transcription,
         ai_response_text=data.reply_text_local,
+        ai_response_text_english=data.reply_text_english,
         ai_response_audio_url=ai_audio_url,
         grammar_correction=data.correction_feedback,
         grammar_score=grammar_score
@@ -198,7 +200,90 @@ async def create_turn(
         turn_number=turn_number,
         transcription=data.user_transcription,
         ai_text=data.reply_text_local,
+        ai_text_english=data.reply_text_english,
         ai_audio_url=ai_audio_url or "",
         correction=data.correction_feedback,
         grammar_score=grammar_score
     )
+
+@router.get("/history", response_model=List[ConversationHistoryResponse])
+async def get_conversation_history(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get user's conversation history with metadata.
+    Shows recent conversations for the dashboard.
+    """
+    # Get user's conversations ordered by most recent
+    conversations = db.query(Conversation).filter(
+        Conversation.user_id == current_user.id
+    ).order_by(desc(Conversation.created_at)).limit(10).all()
+    
+    loader = get_scenario_loader()
+    result = []
+    
+    for conv in conversations:
+        # Get turn count
+        turn_count = db.query(Turn).filter(
+            Turn.conversation_id == conv.id
+        ).count()
+        
+        # Get latest turn for preview
+        latest_turn = db.query(Turn).filter(
+            Turn.conversation_id == conv.id
+        ).order_by(desc(Turn.turn_number)).first()
+        
+        # Get scenario details
+        scenario = loader.get_scenario(conv.scenario_id)
+        
+        result.append(ConversationHistoryResponse(
+            conversation_id=conv.id,
+            scenario_title=scenario['title'] if scenario else "Unknown Scenario",
+            scenario_id=conv.scenario_id,
+            created_at=conv.created_at,
+            turn_count=turn_count,
+            last_message=latest_turn.ai_response_text[:100] if latest_turn else None,
+            active=conv.active
+        ))
+    
+    return result
+
+@router.get("/{conversation_id}/turns", response_model=List[TurnResponse])
+async def get_conversation_turns(
+    conversation_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch all turns for a specific conversation.
+    Used to restore conversation history when user returns to a chat.
+    """
+    # Verify conversation exists and belongs to user
+    conv = db.query(Conversation).filter(
+        Conversation.id == conversation_id,
+        Conversation.user_id == current_user.id
+    ).first()
+    
+    if not conv:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found"
+        )
+    
+    # Fetch all turns in chronological order
+    turns = db.query(Turn).filter(
+        Turn.conversation_id == conversation_id
+    ).order_by(Turn.turn_number.asc()).all()
+    
+    return [
+        TurnResponse(
+            turn_number=t.turn_number,
+            transcription=t.user_transcription,
+            ai_text=t.ai_response_text,
+            ai_text_english=t.ai_response_text_english,
+            ai_audio_url=t.ai_response_audio_url or "",
+            correction=t.grammar_correction,
+            grammar_score=t.grammar_score
+        ) for t in turns
+    ]

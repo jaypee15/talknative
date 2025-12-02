@@ -36,4 +36,5 @@ async def chat_endpoint(
         "correction": data.correction_feedback,
         "reply": data.reply_text_local,
         "audio": base64.b64encode(audio_response).decode(),
+        "sentiment_score": data.sentiment_score,
     }

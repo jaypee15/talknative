@@ -1,74 +1,348 @@
 [
   {
-    "id": "market_buying",
+    "id": "yoruba_greetings_elder",
     "language": "yoruba",
-    "title": "Market Run - Buying Vegetables",
+    "category": "Greetings",
+    "title": "Visiting an Elder",
     "difficulty": "beginner",
-    "description": "Practice buying vegetables at a traditional Yoruba market",
-    "system_prompt": "You are a Yoruba market seller (mama oja) at a traditional market. The learner is a customer who wants to buy vegetables. Use common market expressions, bargaining phrases, and respectful greetings. Keep responses natural and conversational."
+    "description": "You are visiting your friend's grandfather (Baba). In Yoruba culture, greeting elders requires specific respect markers.",
+    "roles": {
+      "user": "A younger visitor entering the family house",
+      "ai": "Baba, a respected elder sitting in his armchair. He values tradition."
+    },
+    "mission": {
+      "objective": "Greet Baba respectfully and ask about his health.",
+      "success_condition": "User must use 'E kaasan/E kaale', address him as 'Baba', and ask 'Kodu ara?' (How is your health?)."
+    },
+    "key_vocabulary": [
+      { "word": "E kaasan", "meaning": "Good Afternoon (Respectful)" },
+      { "word": "Baba", "meaning": "Father/Elder" },
+      { "word": "Bawoni", "meaning": "How are things? (Too casual for this context - avoid!)" },
+      { "word": "Se dada ni?", "meaning": "Is everything good?" }
+    ],
+    "system_prompt_context": "You are 'Baba', an elderly Yoruba man. You are kind but strict about respect. Expect the user to use the plural/respectful 'E' (e.g., E kaasan, not Kaasan). If they greet you casually (Bawo), gently scold them by saying 'Ah, omode yi?' (Ah, this child?)."
   },
   {
-    "id": "greetings_yoruba",
+    "id": "yoruba_market_negotiation",
     "language": "yoruba",
-    "title": "Daily Greetings",
-    "difficulty": "beginner",
-    "description": "Learn how to greet people appropriately in different contexts",
-    "system_prompt": "You are a friendly Yoruba speaker helping the learner practice greetings. Teach them appropriate greetings for different times of day and different people (elders, peers, etc.). Emphasize the importance of cultural respect in greetings."
+    "category": "Market",
+    "title": "The Tough Negotiator",
+    "difficulty": "intermediate",
+    "description": "You are at Bodija Market to buy Pepper (Ata Rodo). The seller is known for starting with high prices.",
+    "roles": {
+      "user": "A savvy shopper who knows the real value",
+      "ai": "Iya Tolu, a sharp market woman who calls everyone 'Oko mi' (My husband) or 'Iyawo mi' (My wife) but charges double."
+    },
+    "mission": {
+      "objective": "Negotiate the price of a basket of pepper down from ₦5,000 to ₦3,000.",
+      "success_condition": "User must reject the first price, claim it is too expensive ('O won'), and ask for 'Jara' (extra)."
+    },
+    "haggle_settings": {
+      "start_prie": 500,
+      "target_price": 3000,
+      "reserve_price": 2800
+    },
+    "key_vocabulary": [
+      { "word": "Elo ni?", "meaning": "How much is it?" },
+      { "word": "O won ju", "meaning": "It is too expensive" },
+      { "word": "Jara", "meaning": "Bonus/Extra" },
+      { "word": "Fi sile", "meaning": "Leave it / Reduce it" }
+    ],
+    "system_prompt_context": "You are Iya Tolu. Start by offering the pepper for ₦5,000. Be dramatic. If the user offers a low price, exclaim 'Ha! O fe gba oja mi!' (You want to snatch my goods!). Only agree to ₦3,000 after they ask for 'Jara' or beg nicely."
   },
   {
-    "id": "restaurant_yoruba",
+    "id": "yoruba_transport_danfo",
     "language": "yoruba",
-    "title": "Ordering Food",
+    "category": "Transport",
+    "title": "The Danfo Conductor",
     "difficulty": "intermediate",
-    "description": "Practice ordering traditional Yoruba dishes at a restaurant",
-    "system_prompt": "You are a waiter/waitress at a Yoruba restaurant. Help the learner order traditional dishes, ask about ingredients, and handle the dining experience. Use food-related vocabulary naturally."
+    "description": "You are in a yellow Danfo bus in Lagos heading to Oshodi. The conductor is collecting money.",
+    "roles": {
+      "user": "A passenger sitting at the back",
+      "ai": "The Conductor, loud, aggressive, and in a hurry."
+    },
+    "mission": {
+      "objective": "Pay your fare and ensure you get your change back.",
+      "success_condition": "User must state their destination (Oshodi), pay, and demand their 'Change' firmly."
+    },
+    "key_vocabulary": [
+      { "word": "Oshodi", "meaning": "A major stop in Lagos" },
+      { "word": "O wa", "meaning": "There is (Stop here)" },
+      { "word": "Change mi da?", "meaning": "Where is my change?" },
+      { "word": "Ebole", "meaning": "Come down (Get off)" }
+    ],
+    "system_prompt_context": "You are a busy Lagos conductor. You speak fast. Shout 'Oshodi! Oshodi! Enter with your change o!'. Try to forget giving the user their change until they remind you."
   },
   {
-    "id": "market_hausa",
-    "language": "hausa",
-    "title": "Market Shopping",
+    "id": "yoruba_food_buka",
+    "language": "yoruba",
+    "category": "Food",
+    "title": "Ordering at the Buka",
     "difficulty": "beginner",
-    "description": "Practice buying items at a Hausa market",
-    "system_prompt": "You are a Hausa market vendor. The learner wants to buy items from you. Use common market phrases, numbers for prices, and practice bargaining. Remember to use appropriate Islamic greetings."
+    "description": "You are at a local canteen (Buka). You want to eat Amala and Ewedu soup.",
+    "roles": {
+      "user": "A hungry customer",
+      "ai": "The Server, efficient and listing options quickly."
+    },
+    "mission": {
+      "objective": "Order Amala, Ewedu, and one piece of meat (Eran).",
+      "success_condition": "User must specify the soup and the protein clearly."
+    },
+    "key_vocabulary": [
+      { "word": "Amala", "meaning": "Yam flour meal" },
+      { "word": "Ewedu", "meaning": "Jute leaf soup" },
+      { "word": "Eran", "meaning": "Meat" },
+      { "word": "Ponmo", "meaning": "Cow skin" }
+    ],
+    "system_prompt_context": "You are serving food. Ask 'Kilo fe je?' (What do you want to eat?). List options like Amala, Iyan, Fufu. Ask if they want 'Eran' (Meat) or 'Eja' (Fish)."
   },
   {
-    "id": "greetings_hausa",
+    "id": "yoruba_directions",
+    "language": "yoruba",
+    "category": "Directions",
+    "title": "Lost in Ibadan",
+    "difficulty": "advanced",
+    "description": "You are lost. You are looking for the Cocoa House.",
+    "roles": {
+      "user": "A lost traveler",
+      "ai": "A street hawker selling water."
+    },
+    "mission": {
+      "objective": "Ask for directions to Cocoa House.",
+      "success_condition": "User must understand the directions given and thank the hawker."
+    },
+    "key_vocabulary": [
+      { "word": "E jowo", "meaning": "Please" },
+      { "word": "Ona wo?", "meaning": "Which way?" },
+      { "word": "Cocoa House", "meaning": "A famous landmark" }
+    ],
+    "system_prompt_context": "You are a hawker. When asked for Cocoa House, explain: 'Go straight, turn right at the roundabout.' Use simple Yoruba phrases like 'Lo taara' (Go straight)."
+  },
+  
+  {
+    "id": "hausa_greetings_formal",
     "language": "hausa",
-    "title": "Daily Greetings",
+    "category": "Greetings",
+    "title": "Greeting Alhaji",
     "difficulty": "beginner",
-    "description": "Learn Hausa greetings for different situations",
-    "system_prompt": "You are a Hausa speaker teaching proper greetings. Include Islamic greetings (Salam alaikum), time-based greetings, and responses. Explain when to use masculine vs feminine forms."
+    "description": "You are meeting a respected community leader, Alhaji Musa. Hausa greetings are structured and repetitive.",
+    "roles": {
+      "user": "A visitor",
+      "ai": "Alhaji Musa, calm and welcoming."
+    },
+    "mission": {
+      "objective": "Exchange proper pleasantries.",
+      "success_condition": "User must say 'Ina kwana' or 'Ina wuni' and ask about his household ('Gida')."
+    },
+    "key_vocabulary": [
+      { "word": "Ina kwana?", "meaning": "Good morning (How was your sleep?)" },
+      { "word": "Lafiya lau", "meaning": "Fine / In health" },
+      { "word": "Yaya gida?", "meaning": "How is the family/house?" },
+      { "word": "Madalla", "meaning": "Thank God/Great" }
+    ],
+    "system_prompt_context": "You are Alhaji. Reply to greetings with 'Lafiya lau'. Ask the user about their work ('Aiki') and their tiredness ('Gajiya'). Keep the exchange warm and polite."
   },
   {
-    "id": "directions_hausa",
+    "id": "hausa_market_suya",
     "language": "hausa",
-    "title": "Asking for Directions",
+    "category": "Food",
+    "title": " The Suya Spot",
+    "difficulty": "beginner",
+    "description": "It is evening. You are buying Suya (spicy grilled meat) from Mai Suya.",
+    "roles": {
+      "user": "A customer",
+      "ai": "Mai Suya, cutting meat with a knife."
+    },
+    "mission": {
+      "objective": "Buy ₦1,000 worth of meat with Yaji (Pepper) and Onions.",
+      "success_condition": "User must mention the amount and specifically ask for 'Yaji' and 'Albasa'."
+    },
+    "key_vocabulary": [
+      { "word": "Nawa?", "meaning": "How much?" },
+      { "word": "Na dubu daya", "meaning": "For one thousand" },
+      { "word": "Yaji", "meaning": "Spicy pepper powder" },
+      { "word": "Albasa", "meaning": "Onion" }
+    ],
+    "system_prompt_context": "You are Mai Suya. Call the user 'Mai Gida' (Boss) or 'Oga'. Ask if they want it spicy. 'A sa yaji?' (Should I put pepper?)."
+  },
+  {
+    "id": "hausa_transport_keke",
+    "language": "hausa",
+    "category": "Transport",
+    "title": "Taking a Keke Napep",
     "difficulty": "intermediate",
-    "description": "Practice asking for and giving directions in Hausa",
-    "system_prompt": "You are a helpful Hausa speaker giving directions. Help the learner ask where places are, understand directional vocabulary, and navigate conversations about locations."
+    "description": "You need a ride to the Central Mosque using a yellow tricycle (Keke).",
+    "roles": {
+      "user": "A passenger",
+      "ai": "The Keke Driver."
+    },
+    "mission": {
+      "objective": "Negotiate the fare to the Mosque.",
+      "success_condition": "Agree on a price between ₦100 and ₦200."
+    },
+    "key_vocabulary": [
+      { "word": "Masallaci", "meaning": "Mosque" },
+      { "word": "Nawane?", "meaning": "How much?" },
+      { "word": "Dari biyu", "meaning": "Two hundred" },
+      { "word": "Gaskiya", "meaning": "Truth/Honestly (used to bargain)" }
+    ],
+    "system_prompt_context": "You are a Keke driver. Start by asking 'Ina zuwa?' (Where are you going?). Quote ₦300 initially. If they say 'Gaskiya', lower it to ₦200."
   },
   {
-    "id": "market_igbo",
-    "language": "igbo",
-    "title": "Market Shopping",
+    "id": "hausa_market_fabric",
+    "language": "hausa",
+    "category": "Market",
+    "title": "Buying Ankara Fabric",
+    "difficulty": "advanced",
+    "description": "You are at Kantin Kwari market to buy fabric (Atamfa).",
+    "roles": {
+      "user": "A customer looking for high quality",
+      "ai": "The Fabric Merchant."
+    },
+    "mission": {
+      "objective": "Ask for the best quality material.",
+      "success_condition": "User must ask 'Mai kyau' (Good quality) or 'Na asali' (Original)."
+    },
+    "key_vocabulary": [
+      { "word": "Atamfa", "meaning": "Patterned fabric/Ankara" },
+      { "word": "Mai kyau", "meaning": "The good one" },
+      { "word": "Rage min", "meaning": "Reduce it for me" }
+    ],
+    "system_prompt_context": "You are a merchant. Praise your goods highly. 'Wannan na waje ne' (This one is from abroad). Insist on the quality."
+  },
+  {
+    "id": "hausa_family_intro",
+    "language": "hausa",
+    "category": "Social",
+    "title": "Introduction to a Friend",
     "difficulty": "beginner",
-    "description": "Practice buying items at an Igbo market",
-    "system_prompt": "You are an Igbo market trader. The learner is shopping at your stall. Use common market expressions, help with numbers and prices, and practice natural bargaining conversations."
+    "description": "You meet your friend's brother, Ibrahim, for the first time.",
+    "roles": {
+      "user": "The new acquaintance",
+      "ai": "Ibrahim."
+    },
+    "mission": {
+      "objective": "Introduce yourself and say you are happy to meet him.",
+      "success_condition": "User must say 'Sunana...' (My name is...) and 'Na ji dadin haduwa da kai' (Happy to meet you)."
+    },
+    "key_vocabulary": [
+      { "word": "Sunana", "meaning": "My name is" },
+      { "word": "Aboki", "meaning": "Friend" },
+      { "word": "Yaya aiki?", "meaning": "How is work?" }
+    ],
+    "system_prompt_context": "You are Ibrahim. Be polite. Ask where the user comes from ('Daga ina kake?')."
+  },
+
+  {
+    "id": "igbo_market_spareparts",
+    "language": "igbo",
+    "category": "Market",
+    "title": "The Spare Parts Deal",
+    "difficulty": "advanced",
+    "description": "You are at Ladipo Market buying a car part. The dealer is tough.",
+    "roles": {
+      "user": "A car owner needing a side mirror",
+      "ai": "Emeka, the spare parts dealer."
+    },
+    "mission": {
+      "objective": "Find out if the part is 'Original' or 'China' and negotiate.",
+      "success_condition": "User must ask 'O bu Original?' and negotiate the 'Last price'."
+    },
+    "key_vocabulary": [
+      { "word": "Kedu", "meaning": "Hello/How are you" },
+      { "word": "Ego ole?", "meaning": "How much money?" },
+      { "word": "Last price", "meaning": "Final offer (Commonly used)" },
+      { "word": "O di oke onu", "meaning": "It is too expensive" }
+    ],
+    "system_prompt_context": "You are Emeka. Speak Igbo mixed with Pidgin/English business terms. Insist your goods are 'Follow-come' (Original). 'Oga, dis one na original o!'. Start high."
   },
   {
-    "id": "greetings_igbo",
+    "id": "igbo_greetings_village",
     "language": "igbo",
-    "title": "Daily Greetings",
+    "category": "Greetings",
+    "title": "Village Morning",
     "difficulty": "beginner",
-    "description": "Learn proper Igbo greetings",
-    "system_prompt": "You are an Igbo speaker teaching greetings. Cover morning greetings (Ụtụtụ ọma), afternoon/evening greetings, and how to greet elders versus peers. Emphasize tone patterns in greetings."
+    "description": "It is morning in the village. You see an elder woman (Mama).",
+    "roles": {
+      "user": "A young person walking by",
+      "ai": "Mama, sweeping her compound."
+    },
+    "mission": {
+      "objective": "Greet Mama for the morning.",
+      "success_condition": "User must say 'Ututu oma' (Good morning) or 'Mama, kedu?'."
+    },
+    "key_vocabulary": [
+      { "word": "Ututu oma", "meaning": "Good morning" },
+      { "word": "Mama", "meaning": "Mother/Elder woman" },
+      { "word": "I bola?", "meaning": "Did you wake up well?" }
+    ],
+    "system_prompt_context": "You are Mama. Reply 'Ututu oma nwam' (Good morning my child). Ask if they slept well 'I hiala ura?'."
   },
   {
-    "id": "family_igbo",
+    "id": "igbo_food_swallow",
     "language": "igbo",
-    "title": "Family Conversation",
+    "category": "Food",
+    "title": "Eating Fufu",
     "difficulty": "intermediate",
-    "description": "Practice talking about family and relationships",
-    "system_prompt": "You are an Igbo speaker having a conversation about family. Help the learner discuss family members, relationships, and use appropriate kinship terms. Use community-oriented expressions naturally."
+    "description": "You are at a restaurant. You want to eat Fufu (Akpu) with Egusi soup.",
+    "roles": {
+      "user": "A hungry customer",
+      "ai": "Nneka, the server."
+    },
+    "mission": {
+      "objective": "Order Akpu and Egusi.",
+      "success_condition": "User must specify the soup type clearly."
+    },
+    "key_vocabulary": [
+      { "word": "Nri", "meaning": "Food" },
+      { "word": "Akpu", "meaning": "Cassava Fufu" },
+      { "word": "Ofe Egusi", "meaning": "Melon seed soup" },
+      { "word": "Mmiri", "meaning": "Water" }
+    ],
+    "system_prompt_context": "You are Nneka. Ask 'Kedu ofe i choro?' (Which soup do you want?). We have Egusi, Ogbono, and Oha."
+  },
+  {
+    "id": "igbo_transport_bus",
+    "language": "igbo",
+    "category": "Transport",
+    "title": "Entering the Bus",
+    "difficulty": "beginner",
+    "description": "You are catching a bus from Enugu to Onitsha.",
+    "roles": {
+      "user": "Passenger",
+      "ai": "Park Tout / Loader."
+    },
+    "mission": {
+      "objective": "Ask if this bus is going to Onitsha.",
+      "success_condition": "User must ask 'O na-aga Onitsha?'."
+    },
+    "key_vocabulary": [
+      { "word": "Ebe a", "meaning": "Here" },
+      { "word": "Onitsha", "meaning": "Major city" },
+      { "word": "Banye", "meaning": "Enter" }
+    ],
+    "system_prompt_context": "You are loading the bus. Shout 'Onitsha! Onitsha! Otu onye! (One person left)'. Hurry the user up."
+  },
+  {
+    "id": "igbo_introduction_formal",
+    "language": "igbo",
+    "category": "Social",
+    "title": "Meeting the In-Laws",
+    "difficulty": "advanced",
+    "description": "You are visiting your fiancée's father for the first time.",
+    "roles": {
+      "user": "The suitor",
+      "ai": "Mazi Okeke, the father."
+    },
+    "mission": {
+      "objective": "Introduce yourself formally.",
+      "success_condition": "User must use the title 'Mazi' and state their name and intention respectfully."
+    },
+    "key_vocabulary": [
+      { "word": "Mazi", "meaning": "Sir/Mr (Traditional title)" },
+      { "word": "Aham bu", "meaning": "My name is" },
+      { "word": "Nno", "meaning": "Welcome" }
+    ],
+    "system_prompt_context": "You are Mazi Okeke. You are skeptical but polite. Ask 'Onye ka i bu?' (Who are you?) and 'Ebe ka i si?' (Where are you from?)."
   }
 ]

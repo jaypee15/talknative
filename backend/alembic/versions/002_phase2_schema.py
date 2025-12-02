@@ -54,6 +54,7 @@ def upgrade() -> None:
         sa.Column('user_audio_url', sa.String(), nullable=True),
         sa.Column('user_transcription', sa.Text(), nullable=False),
         sa.Column('ai_response_text', sa.Text(), nullable=False),
+        sa.Column('ai_response_text_english', sa.Text(), nullable=True),
         sa.Column('ai_response_audio_url', sa.String(), nullable=True),
         sa.Column('grammar_correction', sa.Text(), nullable=True),
         sa.Column('grammar_score', sa.Integer(), nullable=True),

@@ -1,0 +1,127 @@
+[
+    {
+      "id": "yo_1",
+      "language": "yoruba",
+      "content": "Ile la ti n ko eso r'ode",
+      "literal_translation": "Charity begins at home",
+      "meaning": "Good behavior is learned from the family.",
+      "rarity": "common"
+    },
+    {
+      "id": "yo_2",
+      "language": "yoruba",
+      "content": "Odo to gbagbe orisun e, gbigbe lo ma gbe",
+      "literal_translation": "A river that forgets its source will dry up",
+      "meaning": "Never forget your roots.",
+      "rarity": "legendary"
+    },
+    {
+      "id": "yo_3",
+      "language": "yoruba",
+      "content": "A ki fi ete sile pa lapalapa",
+      "literal_translation": "One does not abandon leprosy to treat eczema",
+      "meaning": "Focus on solving major problems before minor ones.",
+      "rarity": "common"
+    },
+    {
+      "id": "yo_4",
+      "language": "yoruba",
+      "content": "Bi omode ba subu, a wo iwaju; bi agbalagba ba subu, a wo eyin",
+      "literal_translation": "When a child falls, he looks forward; when an elder falls, he looks back",
+      "meaning": "Adults reflect on past mistakes; children look ahead.",
+      "rarity": "uncommon"
+    },
+    {
+      "id": "yo_5",
+      "language": "yoruba",
+      "content": "Agba kii wa loja, ki ori omo tuntun wo",
+      "literal_translation": "An elder cannot be in the market while a baby's head goes crooked",
+      "meaning": "Elders must guide and protect the young.",
+      "rarity": "common"
+    },
+  
+    /* IGBO PROVERBS (5) */
+    {
+      "id": "ig_1",
+      "language": "igbo",
+      "content": "Nwata kwọọ aka, osoro okenye rie nri",
+      "literal_translation": "If a child washes his hands well, he eats with elders",
+      "meaning": "Hard work and discipline earn respect.",
+      "rarity": "common"
+    },
+    {
+      "id": "ig_2",
+      "language": "igbo",
+      "content": "A naghi agba oso a na-ata anụ ọhịa n’ụlọ",
+      "literal_translation": "No one hunts animals while sitting at home",
+      "meaning": "Success requires effort.",
+      "rarity": "common"
+    },
+    {
+      "id": "ig_3",
+      "language": "igbo",
+      "content": "Egbe bere, ugo bere",
+      "literal_translation": "Let the kite perch and let the eagle perch",
+      "meaning": "Live and let live; there is space for everyone.",
+      "rarity": "legendary"
+    },
+    {
+      "id": "ig_4",
+      "language": "igbo",
+      "content": "Oku nwere ebe o si banye n’ulo",
+      "literal_translation": "A fire has the place it entered from",
+      "meaning": "Problems have causes that must be traced.",
+      "rarity": "uncommon"
+    },
+    {
+      "id": "ig_5",
+      "language": "igbo",
+      "content": "Onye ajụjụ adịghị efu ụzọ",
+      "literal_translation": "He who asks questions never loses his way",
+      "meaning": "Asking questions brings knowledge and direction.",
+      "rarity": "common"
+    },
+  
+    /* HAUSA PROVERBS (5) */
+    {
+      "id": "ha_1",
+      "language": "hausa",
+      "content": "Komai nisan jifa, ƙasa zai faɗo",
+      "literal_translation": "No matter how far a throw goes, it will land",
+      "meaning": "All actions have consequences.",
+      "rarity": "common"
+    },
+    {
+      "id": "ha_2",
+      "language": "hausa",
+      "content": "Rana dubu ta barawo, rana ɗaya ta mai kaya",
+      "literal_translation": "A thousand days for the thief, one day for the owner",
+      "meaning": "Justice will eventually prevail.",
+      "rarity": "legendary"
+    },
+    {
+      "id": "ha_3",
+      "language": "hausa",
+      "content": "In ka ga gawa, ka ga darasi",
+      "literal_translation": "When you see a corpse, you see a lesson",
+      "meaning": "Learn from the misfortunes of others.",
+      "rarity": "uncommon"
+    },
+    {
+      "id": "ha_4",
+      "language": "hausa",
+      "content": "Ba a maganin wauta",
+      "literal_translation": "There is no cure for foolishness",
+      "meaning": "Some behaviors cannot be corrected.",
+      "rarity": "common"
+    },
+    {
+      "id": "ha_5",
+      "language": "hausa",
+      "content": "Kowa ya ci alala, ya sha ruwa",
+      "literal_translation": "Whoever eats okra must drink water",
+      "meaning": "Every action has a responsibility attached.",
+      "rarity": "common"
+    }
+  ]
+  
