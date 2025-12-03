@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getScenarios, getUserProgress } from '../lib/api'
-
-import { Lock, Star, Airplane, Bus, Basket, House, Cards } from '@phosphor-icons/react'
+import { LockIcon, StarIcon, AirplaneIcon, BusIcon, BasketIcon, HouseIcon, CardsIcon, MapPinIcon } from '@phosphor-icons/react'
 
 
 export default function MapDashboard() {
@@ -31,16 +30,14 @@ export default function MapDashboard() {
 
   // Icons Helper
   const renderIcon = (level: number, locked: boolean) => {
-    if (locked) return <Lock size={32} weight="fill" className="text-gray-400" />
-    
-    // Custom icons based on level/theme
+    if (locked) return <LockIcon size={32} weight="fill" className="text-gray-400" />
     switch(level) {
-        case 1: return <span className="text-3xl filter drop-shadow-md">👋</span> // Greetings
-        case 2: return <span className="text-3xl filter drop-shadow-md">🚌</span> // Transport
-        case 3: return <span className="text-3xl filter drop-shadow-md">🧺</span> // Market
-        case 4: return <span className="text-3xl filter drop-shadow-md">🍲</span> // Food
-        case 5: return <span className="text-3xl filter drop-shadow-md">🛖</span> // Village/Boss
-        default: return <span className="text-3xl filter drop-shadow-md">📍</span>
+        case 1: return <AirplaneIcon size={32} weight="fill" className="text-naija-primary" />
+        case 2: return <BusIcon size={32} weight="fill" className="text-naija-primary" />
+        case 3: return <BasketIcon size={32} weight="fill" className="text-naija-primary" />
+        case 4: return <HouseIcon size={32} weight="fill" className="text-naija-primary" />
+        case 5: return <HouseIcon size={32} weight="fill" className="text-naija-primary" />
+        default: return <MapPinIcon size={32} weight="fill" className="text-naija-primary" />
     }
   }
 
@@ -59,7 +56,7 @@ export default function MapDashboard() {
             onClick={() => navigate('/wisdom')} 
             className="bg-white/10 hover:bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-2 border border-white/20 transition-all active:scale-95"
           >
-            <Cards size={24} weight="fill" className="text-naija-secondary" />
+            <CardsIcon size={24} weight="fill" className="text-naija-secondary" />
             <span className="font-medium text-sm">Loot</span>
           </button>
         </div>
@@ -107,7 +104,7 @@ export default function MapDashboard() {
                   {/* Completion Checkmark */}
                   {stars >= 1 && (
                     <div className="absolute -top-3 -right-3 w-8 h-8 bg-naija-secondary rounded-full flex items-center justify-center -rotate-45 border-2 border-white shadow-sm z-20">
-                      <Star size={16} weight="fill" className="text-naija-dark" />
+                      <StarIcon size={16} weight="fill" className="text-naija-dark" />
                     </div>
                   )}
                 </button>
@@ -125,10 +122,10 @@ export default function MapDashboard() {
                   {!locked && (
                     <div className="flex justify-center gap-1 bg-gray-50 rounded-full py-1 px-2 w-fit mx-auto border border-gray-100">
                       {[1, 2, 3].map(i => (
-                        <Star key={i} size={12} weight="fill" className={i <= stars ? "text-naija-secondary" : "text-gray-200"} />
+                        <StarIcon key={i} size={12} weight="fill" className={i <= stars ? "text-naija-secondary" : "text-gray-200"} />
                       ))}
-                    </div>
-                  )}
+                  </div>
+                )}
                 </div>
               </div>
             )
