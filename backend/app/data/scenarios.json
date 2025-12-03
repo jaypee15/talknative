@@ -4,6 +4,7 @@
     "language": "yoruba",
     "category": "Greetings",
     "title": "Visiting an Elder",
+    "level": 1,
     "difficulty": "beginner",
     "description": "You are visiting your friend's grandfather (Baba). In Yoruba culture, greeting elders requires specific respect markers.",
     "roles": {
@@ -23,10 +24,59 @@
     "system_prompt_context": "You are 'Baba', an elderly Yoruba man. You are kind but strict about respect. Expect the user to use the plural/respectful 'E' (e.g., E kaasan, not Kaasan). If they greet you casually (Bawo), gently scold them by saying 'Ah, omode yi?' (Ah, this child?)."
   },
   {
+    "id": "yoruba_food_buka",
+    "language": "yoruba",
+    "category": "Food",
+    "title": "Ordering at the Buka",
+    "level": 2,
+    "difficulty": "beginner",
+    "description": "You are at a local canteen (Buka). You want to eat Amala and Ewedu soup.",
+    "roles": {
+      "user": "A hungry customer",
+      "ai": "The Server, efficient and listing options quickly."
+    },
+    "mission": {
+      "objective": "Order Amala, Ewedu, and one piece of meat (Eran).",
+      "success_condition": "User must specify the soup and the protein clearly."
+    },
+    "key_vocabulary": [
+      { "word": "Amala", "meaning": "Yam flour meal" },
+      { "word": "Ewedu", "meaning": "Jute leaf soup" },
+      { "word": "Eran", "meaning": "Meat" },
+      { "word": "Ponmo", "meaning": "Cow skin" }
+    ],
+    "system_prompt_context": "You are serving food. Ask 'Kilo fe je?' (What do you want to eat?). List options like Amala, Iyan, Fufu. Ask if they want 'Eran' (Meat) or 'Eja' (Fish)."
+  },
+  {
+    "id": "yoruba_transport_danfo",
+    "language": "yoruba",
+    "category": "Transport",
+    "title": "The Danfo Conductor",
+    "level": 3,
+    "difficulty": "intermediate",
+    "description": "You are in a yellow Danfo bus in Lagos heading to Oshodi. The conductor is collecting money.",
+    "roles": {
+      "user": "A passenger sitting at the back",
+      "ai": "The Conductor, loud, aggressive, and in a hurry."
+    },
+    "mission": {
+      "objective": "Pay your fare and ensure you get your change back.",
+      "success_condition": "User must state their destination (Oshodi), pay, and demand their 'Change' firmly."
+    },
+    "key_vocabulary": [
+      { "word": "Oshodi", "meaning": "A major stop in Lagos" },
+      { "word": "O wa", "meaning": "There is (Stop here)" },
+      { "word": "Change mi da?", "meaning": "Where is my change?" },
+      { "word": "Ebole", "meaning": "Come down (Get off)" }
+    ],
+    "system_prompt_context": "You are a busy Lagos conductor. You speak fast. Shout 'Oshodi! Oshodi! Enter with your change o!'. Try to forget giving the user their change until they remind you."
+  },
+  {
     "id": "yoruba_market_negotiation",
     "language": "yoruba",
     "category": "Market",
     "title": "The Tough Negotiator",
+    "level": 4,
     "difficulty": "intermediate",
     "description": "You are at Bodija Market to buy Pepper (Ata Rodo). The seller is known for starting with high prices.",
     "roles": {
@@ -51,56 +101,11 @@
     "system_prompt_context": "You are Iya Tolu. Start by offering the pepper for ₦5,000. Be dramatic. If the user offers a low price, exclaim 'Ha! O fe gba oja mi!' (You want to snatch my goods!). Only agree to ₦3,000 after they ask for 'Jara' or beg nicely."
   },
   {
-    "id": "yoruba_transport_danfo",
-    "language": "yoruba",
-    "category": "Transport",
-    "title": "The Danfo Conductor",
-    "difficulty": "intermediate",
-    "description": "You are in a yellow Danfo bus in Lagos heading to Oshodi. The conductor is collecting money.",
-    "roles": {
-      "user": "A passenger sitting at the back",
-      "ai": "The Conductor, loud, aggressive, and in a hurry."
-    },
-    "mission": {
-      "objective": "Pay your fare and ensure you get your change back.",
-      "success_condition": "User must state their destination (Oshodi), pay, and demand their 'Change' firmly."
-    },
-    "key_vocabulary": [
-      { "word": "Oshodi", "meaning": "A major stop in Lagos" },
-      { "word": "O wa", "meaning": "There is (Stop here)" },
-      { "word": "Change mi da?", "meaning": "Where is my change?" },
-      { "word": "Ebole", "meaning": "Come down (Get off)" }
-    ],
-    "system_prompt_context": "You are a busy Lagos conductor. You speak fast. Shout 'Oshodi! Oshodi! Enter with your change o!'. Try to forget giving the user their change until they remind you."
-  },
-  {
-    "id": "yoruba_food_buka",
-    "language": "yoruba",
-    "category": "Food",
-    "title": "Ordering at the Buka",
-    "difficulty": "beginner",
-    "description": "You are at a local canteen (Buka). You want to eat Amala and Ewedu soup.",
-    "roles": {
-      "user": "A hungry customer",
-      "ai": "The Server, efficient and listing options quickly."
-    },
-    "mission": {
-      "objective": "Order Amala, Ewedu, and one piece of meat (Eran).",
-      "success_condition": "User must specify the soup and the protein clearly."
-    },
-    "key_vocabulary": [
-      { "word": "Amala", "meaning": "Yam flour meal" },
-      { "word": "Ewedu", "meaning": "Jute leaf soup" },
-      { "word": "Eran", "meaning": "Meat" },
-      { "word": "Ponmo", "meaning": "Cow skin" }
-    ],
-    "system_prompt_context": "You are serving food. Ask 'Kilo fe je?' (What do you want to eat?). List options like Amala, Iyan, Fufu. Ask if they want 'Eran' (Meat) or 'Eja' (Fish)."
-  },
-  {
     "id": "yoruba_directions",
     "language": "yoruba",
     "category": "Directions",
     "title": "Lost in Ibadan",
+    "level": 5,
     "difficulty": "advanced",
     "description": "You are lost. You are looking for the Cocoa House.",
     "roles": {
@@ -118,12 +123,12 @@
     ],
     "system_prompt_context": "You are a hawker. When asked for Cocoa House, explain: 'Go straight, turn right at the roundabout.' Use simple Yoruba phrases like 'Lo taara' (Go straight)."
   },
-  
   {
     "id": "hausa_greetings_formal",
     "language": "hausa",
     "category": "Greetings",
     "title": "Greeting Alhaji",
+    "level": 1,
     "difficulty": "beginner",
     "description": "You are meeting a respected community leader, Alhaji Musa. Hausa greetings are structured and repetitive.",
     "roles": {
@@ -147,6 +152,7 @@
     "language": "hausa",
     "category": "Food",
     "title": " The Suya Spot",
+    "level": 2,
     "difficulty": "beginner",
     "description": "It is evening. You are buying Suya (spicy grilled meat) from Mai Suya.",
     "roles": {
@@ -166,10 +172,34 @@
     "system_prompt_context": "You are Mai Suya. Call the user 'Mai Gida' (Boss) or 'Oga'. Ask if they want it spicy. 'A sa yaji?' (Should I put pepper?)."
   },
   {
+    "id": "hausa_family_intro",
+    "language": "hausa",
+    "category": "Social",
+    "title": "Introduction to a Friend",
+    "level": 3,
+    "difficulty": "beginner",
+    "description": "You meet your friend's brother, Ibrahim, for the first time.",
+    "roles": {
+      "user": "The new acquaintance",
+      "ai": "Ibrahim."
+    },
+    "mission": {
+      "objective": "Introduce yourself and say you are happy to meet him.",
+      "success_condition": "User must say 'Sunana...' (My name is...) and 'Na ji dadin haduwa da kai' (Happy to meet you)."
+    },
+    "key_vocabulary": [
+      { "word": "Sunana", "meaning": "My name is" },
+      { "word": "Aboki", "meaning": "Friend" },
+      { "word": "Yaya aiki?", "meaning": "How is work?" }
+    ],
+    "system_prompt_context": "You are Ibrahim. Be polite. Ask where the user comes from ('Daga ina kake?')."
+  },
+  {
     "id": "hausa_transport_keke",
     "language": "hausa",
     "category": "Transport",
     "title": "Taking a Keke Napep",
+    "level": 4,
     "difficulty": "intermediate",
     "description": "You need a ride to the Central Mosque using a yellow tricycle (Keke).",
     "roles": {
@@ -193,6 +223,7 @@
     "language": "hausa",
     "category": "Market",
     "title": "Buying Ankara Fabric",
+    "level": 5,
     "difficulty": "advanced",
     "description": "You are at Kantin Kwari market to buy fabric (Atamfa).",
     "roles": {
@@ -209,53 +240,6 @@
       { "word": "Rage min", "meaning": "Reduce it for me" }
     ],
     "system_prompt_context": "You are a merchant. Praise your goods highly. 'Wannan na waje ne' (This one is from abroad). Insist on the quality."
-  },
-  {
-    "id": "hausa_family_intro",
-    "language": "hausa",
-    "category": "Social",
-    "title": "Introduction to a Friend",
-    "difficulty": "beginner",
-    "description": "You meet your friend's brother, Ibrahim, for the first time.",
-    "roles": {
-      "user": "The new acquaintance",
-      "ai": "Ibrahim."
-    },
-    "mission": {
-      "objective": "Introduce yourself and say you are happy to meet him.",
-      "success_condition": "User must say 'Sunana...' (My name is...) and 'Na ji dadin haduwa da kai' (Happy to meet you)."
-    },
-    "key_vocabulary": [
-      { "word": "Sunana", "meaning": "My name is" },
-      { "word": "Aboki", "meaning": "Friend" },
-      { "word": "Yaya aiki?", "meaning": "How is work?" }
-    ],
-    "system_prompt_context": "You are Ibrahim. Be polite. Ask where the user comes from ('Daga ina kake?')."
-  },
-
-  {
-    "id": "igbo_market_spareparts",
-    "language": "igbo",
-    "category": "Market",
-    "title": "The Spare Parts Deal",
-    "level": 4,
-    "difficulty": "advanced",
-    "description": "You are at Ladipo Market buying a car part. The dealer is tough.",
-    "roles": {
-      "user": "A car owner needing a side mirror",
-      "ai": "Emeka, the spare parts dealer."
-    },
-    "mission": {
-      "objective": "Find out if the part is 'Original' or 'China' and negotiate.",
-      "success_condition": "User must ask 'O bu Original?' and negotiate the 'Last price'."
-    },
-    "key_vocabulary": [
-      { "word": "Kedu", "meaning": "Hello/How are you" },
-      { "word": "Ego ole?", "meaning": "How much money?" },
-      { "word": "Last price", "meaning": "Final offer (Commonly used)" },
-      { "word": "O di oke onu", "meaning": "It is too expensive" }
-    ],
-    "system_prompt_context": "You are Emeka. Speak Igbo mixed with Pidgin/English business terms. Insist your goods are 'Follow-come' (Original). 'Oga, dis one na original o!'. Start high."
   },
   {
     "id": "igbo_greetings_village",
@@ -279,6 +263,29 @@
       { "word": "I bola?", "meaning": "Did you wake up well?" }
     ],
     "system_prompt_context": "You are Mama. Reply 'Ututu oma nwam' (Good morning my child). Ask if they slept well 'I hiala ura?'."
+  },
+  {
+    "id": "igbo_transport_bus",
+    "language": "igbo",
+    "category": "Transport",
+    "title": "Entering the Bus",
+    "level": 2,
+    "difficulty": "beginner",
+    "description": "You are catching a bus from Enugu to Onitsha.",
+    "roles": {
+      "user": "Passenger",
+      "ai": "Park Tout / Loader."
+    },
+    "mission": {
+      "objective": "Ask if this bus is going to Onitsha.",
+      "success_condition": "User must ask 'O na-aga Onitsha?'."
+    },
+    "key_vocabulary": [
+      { "word": "Ebe a", "meaning": "Here" },
+      { "word": "Onitsha", "meaning": "Major city" },
+      { "word": "Banye", "meaning": "Enter" }
+    ],
+    "system_prompt_context": "You are loading the bus. Shout 'Onitsha! Onitsha! Otu onye! (One person left)'. Hurry the user up."
   },
   {
     "id": "igbo_food_swallow",
@@ -305,27 +312,28 @@
     "system_prompt_context": "You are Nneka. Ask 'Kedu ofe i choro?' (Which soup do you want?). We have Egusi, Ogbono, and Oha."
   },
   {
-    "id": "igbo_transport_bus",
+    "id": "igbo_market_spareparts",
     "language": "igbo",
-    "category": "Transport",
-    "title": "Entering the Bus",
-    "level": 2,
-    "difficulty": "beginner",
-    "description": "You are catching a bus from Enugu to Onitsha.",
+    "category": "Market",
+    "title": "The Spare Parts Deal",
+    "level": 4,
+    "difficulty": "advanced",
+    "description": "You are at Ladipo Market buying a car part. The dealer is tough.",
     "roles": {
-      "user": "Passenger",
-      "ai": "Park Tout / Loader."
+      "user": "A car owner needing a side mirror",
+      "ai": "Emeka, the spare parts dealer."
     },
     "mission": {
-      "objective": "Ask if this bus is going to Onitsha.",
-      "success_condition": "User must ask 'O na-aga Onitsha?'."
+      "objective": "Find out if the part is 'Original' or 'China' and negotiate.",
+      "success_condition": "User must ask 'O bu Original?' and negotiate the 'Last price'."
     },
     "key_vocabulary": [
-      { "word": "Ebe a", "meaning": "Here" },
-      { "word": "Onitsha", "meaning": "Major city" },
-      { "word": "Banye", "meaning": "Enter" }
+      { "word": "Kedu", "meaning": "Hello/How are you" },
+      { "word": "Ego ole?", "meaning": "How much money?" },
+      { "word": "Last price", "meaning": "Final offer (Commonly used)" },
+      { "word": "O di oke onu", "meaning": "It is too expensive" }
     ],
-    "system_prompt_context": "You are loading the bus. Shout 'Onitsha! Onitsha! Otu onye! (One person left)'. Hurry the user up."
+    "system_prompt_context": "You are Emeka. Speak Igbo mixed with Pidgin/English business terms. Insist your goods are 'Follow-come' (Original). 'Oga, dis one na original o!'. Start high."
   },
   {
     "id": "igbo_introduction_formal",

@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getScenarios, getUserProgress, getUserProfile } from '../lib/api'
+import { getScenarios, getUserProgress, getUserProfile, Scenario } from '../lib/api'
+import ScenarioModal from '../components/ScenarioModal'
 import { LockIcon, StarIcon, AirplaneIcon, BusIcon, BasketIcon, HouseIcon, CardsIcon, MapPinIcon } from '@phosphor-icons/react'
 
 
 export default function MapDashboard() {
-  const [scenarios, setScenarios] = useState<any[]>([])
+  const [scenarios, setScenarios] = useState<Scenario[]>([])
   const [progress, setProgress] = useState<any>({})
+  const [selected, setSelected] = useState<Scenario | null>(null)
+  const [showModal, setShowModal] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -96,7 +99,7 @@ export default function MapDashboard() {
                 {/* Scenario Node */}
                 <button
                   disabled={locked}
-                  onClick={() => navigate(`/chat/${scenario.id}`, { state: { scenarioId: scenario.id } })}
+                  onClick={() => { setSelected(scenario); setShowModal(true) }}
                   className={`
                     group relative w-24 h-24 rounded-3xl rotate-45 border-[6px] flex items-center justify-center shadow-2xl transition-all duration-300
                     ${locked 
@@ -140,6 +143,13 @@ export default function MapDashboard() {
           })}
         </div>
       </div>
+      {showModal && selected && (
+        <ScenarioModal 
+          scenario={selected}
+          onClose={() => setShowModal(false)}
+          onStart={() => { setShowModal(false); navigate(`/chat/${selected.id}`, { state: { scenarioId: selected.id } }) }}
+        />
+      )}
     </div>
   )
 }

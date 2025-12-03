@@ -69,6 +69,7 @@ export interface Scenario {
   key_vocabulary?: KeyVocabulary[]
   system_prompt_context?: string
   haggle_settings?: HaggleSettings
+  level: number
 }
 
 export interface ConversationStart {
