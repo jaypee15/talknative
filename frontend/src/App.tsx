@@ -1,5 +1,6 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
+import LandingPage from './pages/LandingPage'
 import OnboardingPage from './pages/OnboardingPage'
 import ChatPage from './pages/ChatPage'
 import RequireAuth from './components/RequireAuth'
@@ -46,8 +47,8 @@ export default function App() {
         }
       />
       
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      {/* Public landing page */}
+      <Route path="/" element={<LandingPage />} />
     </Routes>
   )
 }
