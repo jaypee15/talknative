@@ -2,14 +2,16 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getScenarios, getUserProgress } from '../lib/api'
 
-// Simple SVG Icons
+// Visual Icons
 const Icons = {
-  Lock: () => <span className="text-2xl">🔒</span>,
-  Star: ({ filled }: { filled: boolean }) => <span className={`text-sm ${filled ? 'text-yellow-400' : 'text-gray-300'}`}>★</span>,
-  Airport: () => <span className="text-3xl">✈️</span>,
-  Bus: () => <span className="text-3xl">🚌</span>,
-  Market: () => <span className="text-3xl">🧺</span>,
-  Village: () => <span className="text-3xl">🛖</span>,
+  Lock: () => <i className="ph-fill ph-lock-key text-2xl text-gray-400"></i>,
+  Star: ({ filled }: { filled: boolean }) => (
+    <i className={`ph-fill ph-star text-xs ${filled ? 'text-naija-secondary drop-shadow-sm' : 'text-gray-200'}`}></i>
+  ),
+  Airport: () => <span className="text-3xl filter drop-shadow-md">🛫</span>,
+  Bus: () => <span className="text-3xl filter drop-shadow-md">🚌</span>,
+  Market: () => <span className="text-3xl filter drop-shadow-md">🧺</span>,
+  Village: () => <span className="text-3xl filter drop-shadow-md">🛖</span>,
 }
 
 export default function MapDashboard() {
@@ -22,7 +24,6 @@ export default function MapDashboard() {
       // Sort scenarios by level
       const sorted = sData.sort((a: any, b: any) => a.level - b.level)
       setScenarios(sorted)
-      
       // Map progress array to object
       const pMap = pData.reduce((acc: any, curr: any) => ({
         ...acc, [curr.scenario_id]: curr.stars
@@ -34,58 +35,101 @@ export default function MapDashboard() {
   const isUnlocked = (index: number) => {
     if (index === 0) return true
     const prevId = scenarios[index - 1].id
-    return (progress[prevId] || 0) >= 1 // Need at least 1 star to unlock next
+    return (progress[prevId] || 0) >= 1
   }
 
   return (
-    <div className="min-h-screen bg-[#FDF6E3] pb-20">
-      <div className="bg-green-800 text-white p-4 shadow-md sticky top-0 z-10 flex justify-between items-center">
-        <h1 className="font-bold text-lg">🇳🇬 Naija Tour</h1>
-        <button onClick={() => navigate('/deck')} className="text-sm bg-green-700 px-3 py-1 rounded-full">
-          🃏 Wisdom Deck
-        </button>
+    <div className="min-h-screen bg-naija-paper bg-ankara-pattern pb-24 overflow-x-hidden relative">
+      {/* Header */}
+      <div className="bg-naija-primary text-white p-6 shadow-xl rounded-b-[2.5rem] sticky top-0 z-20 border-b-4 border-naija-secondary">
+        <div className="flex justify-between items-center max-w-md mx-auto">
+          <div>
+            <h1 className="text-2xl font-bold font-display tracking-wide">Naija Tour 🇳🇬</h1>
+            <p className="text-naija-secondary text-sm font-medium opacity-90">
+              Level {Object.keys(progress).length + 1} Traveler
+            </p>
+          </div>
+          <button 
+            onClick={() => navigate('/wisdom')} 
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-2 border border-white/20 transition-all active:scale-95"
+          >
+            <i className="ph-fill ph-cards text-naija-secondary text-xl"></i>
+            <span className="font-medium text-sm">Loot</span>
+          </button>
+        </div>
       </div>
 
-      <div className="max-w-md mx-auto p-8 relative">
-        {/* Road Line */}
-        <div className="absolute left-1/2 top-0 bottom-0 w-2 bg-gray-200 -ml-1 z-0"></div>
+      <div className="max-w-md mx-auto p-8 relative mt-8">
+        {/* Winding Road SVG Background */}
+        <svg className="absolute left-0 top-0 w-full h-full z-0 pointer-events-none opacity-20" preserveAspectRatio="none">
+          <path 
+            d="M50,0 C50,150 300,300 50,450 C-200,600 300,750 50,900 C-200,1050 300,1200 50,1350" 
+            stroke="#2E7D32" 
+            strokeWidth="40" 
+            fill="none" 
+            strokeDasharray="20 20" 
+            strokeLinecap="round"
+          />
+        </svg>
 
-        {scenarios.map((scenario, index) => {
-          const locked = !isUnlocked(index)
-          const stars = progress[scenario.id] || 0
-          
-          return (
-            <div key={scenario.id} className="relative z-10 mb-16 flex flex-col items-center">
-              {/* Level Node */}
-              <button
-                disabled={locked}
-                onClick={() => navigate(`/chat/${scenario.id}`, { state: { scenarioId: scenario.id } })}
-                className={`
-                  w-20 h-20 rounded-full border-4 flex items-center justify-center shadow-xl transition-transform hover:scale-105
-                  ${locked 
-                    ? 'bg-gray-300 border-gray-400 grayscale cursor-not-allowed' 
-                    : 'bg-white border-green-600 cursor-pointer'}
-                `}
-              >
-                {locked ? <Icons.Lock /> : (
-                  scenario.level === 1 ? <Icons.Airport /> :
-                  scenario.level === 2 ? <Icons.Bus /> :
-                  scenario.level === 3 ? <Icons.Market /> : <Icons.Village />
-                )}
-              </button>
-
-              {/* Info Label */}
-              <div className="mt-3 bg-white px-4 py-2 rounded-xl shadow-sm text-center border border-gray-100">
-                <div className="font-bold text-gray-800">{scenario.title}</div>
-                {!locked && (
-                  <div className="flex justify-center mt-1 space-x-1">
-                    {[1, 2, 3].map(i => <Icons.Star key={i} filled={i <= stars} />)}
+        <div className="relative z-10 flex flex-col items-center space-y-24 pt-4">
+          {scenarios.map((scenario, index) => {
+            const locked = !isUnlocked(index)
+            const stars = progress[scenario.id] || 0
+            // Stagger nodes left and right to follow the "road"
+            const offsetClass = index % 2 === 0 ? 'translate-x-12' : '-translate-x-12'
+            
+            return (
+              <div key={scenario.id} className={`flex flex-col items-center ${offsetClass}`}>
+                
+                {/* Scenario Node */}
+                <button
+                  disabled={locked}
+                  onClick={() => navigate(`/chat/${scenario.id}`, { state: { scenarioId: scenario.id } })}
+                  className={`
+                    group relative w-24 h-24 rounded-3xl rotate-45 border-[6px] flex items-center justify-center shadow-2xl transition-all duration-300
+                    ${locked 
+                      ? 'bg-gray-200 border-gray-300 grayscale cursor-not-allowed' 
+                      : 'bg-gradient-to-br from-white to-naija-paper border-naija-primary hover:scale-110 hover:rotate-[50deg] cursor-pointer ring-4 ring-naija-primary/20'}
+                  `}
+                >
+                  {/* Un-rotate content */}
+                  <div className="-rotate-45 flex flex-col items-center justify-center transform transition-transform group-hover:scale-110">
+                    {locked ? <Icons.Lock /> : (
+                      scenario.level === 1 ? <Icons.Airport /> :
+                      scenario.level === 2 ? <Icons.Bus /> :
+                      scenario.level === 3 ? <Icons.Market /> : <Icons.Village />
+                    )}
                   </div>
-                )}
+                  
+                  {/* Completion Checkmark */}
+                  {stars >= 1 && (
+                    <div className="absolute -top-3 -right-3 w-8 h-8 bg-naija-secondary rounded-full flex items-center justify-center -rotate-45 border-2 border-white shadow-sm z-20">
+                      <i className="ph-bold ph-check text-naija-dark text-sm"></i>
+                    </div>
+                  )}
+                </button>
+
+                {/* Label Badge */}
+                <div className={`
+                  mt-8 px-5 py-3 bg-white rounded-2xl shadow-xl border border-gray-100 text-center min-w-[160px]
+                  transition-all duration-300 transform relative
+                  ${locked ? 'opacity-50 grayscale' : 'hover:-translate-y-1'}
+                `}>
+                  {/* Little arrow pointing up to diamond */}
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white rotate-45 border-t border-l border-gray-100"></div>
+                  
+                  <div className="font-bold text-naija-dark text-sm mb-1 font-display leading-tight">{scenario.title}</div>
+                  {!locked && (
+                    <div className="flex justify-center gap-1 bg-gray-50 rounded-full py-1 px-2 w-fit mx-auto border border-gray-100">
+                      {[1, 2, 3].map(i => <Icons.Star key={i} filled={i <= stars} />)}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </div>
   )

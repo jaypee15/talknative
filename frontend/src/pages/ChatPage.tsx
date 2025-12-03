@@ -13,14 +13,13 @@ interface Turn {
   ai_text: string
   ai_text_english: string | null
   ai_audio_url: string
-  audio_available?: boolean | null
-  audio_provider?: string | null
-  audio_error?: string | null
   correction: string | null
   grammar_score: number | null
   user_audio_url?: string
   sentiment_score: number | null
   negotiated_price: number | null
+  cultural_flag?: boolean
+  cultural_feedback?: string | null
 }
 
 export default function ChatPage() {
@@ -52,7 +51,6 @@ export default function ChatPage() {
   const [culturalFeedback, setCulturalFeedback] = useState<string | null>(null)
   const [wonLoot, setWonLoot] = useState<any | null>(null)
   
-  // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const audioElementRef = useRef<HTMLAudioElement | null>(null)
 
@@ -64,27 +62,19 @@ export default function ChatPage() {
     }
   })
 
-  // 1. Load conversation history and scenario on mount
+  // Load History
   useEffect(() => {
     const loadData = async () => {
       if (!conversationId) return
-      
       try {
         setLoadingHistory(true)
         const history = await getConversationTurns(conversationId)
-        // Cast the response to include gamification fields if they come from DB
         setTurns(history as Turn[])
         
-        // Try to get scenario from location state or fetch it based on history/ID
         const stateScenarioId = (location.state as any)?.scenarioId
-        
         if (stateScenarioId) {
           const scenarioData = await getScenarioById(stateScenarioId)
           setScenario(scenarioData)
-        } else {
-          // If we reloaded page, we might need a way to fetch scenario ID from the conversation
-          // For MVP, we might rely on the user coming from dashboard, or add scenario_id to TurnResponse
-          // This part assumes we can retrieve it or it was passed
         }
       } catch (err: any) {
         console.error('Failed to load history:', err)
@@ -93,27 +83,22 @@ export default function ChatPage() {
         setLoadingHistory(false)
       }
     }
-    
     loadData()
   }, [conversationId, location.state])
 
-  // 2. Initialize Gamification Settings when Scenario Loads
+  // Initialize Logic
   useEffect(() => {
     if (scenario?.haggle_settings) {
       setCurrentPrice(scenario.haggle_settings.start_price)
     }
   }, [scenario])
 
-  // 3. Patience Timer Logic
   useEffect(() => {
     if (gameStatus !== 'active') return
-
     const timer = setInterval(() => {
       setPatience(prev => {
-        // Drain slower if recording (user is active), faster if idle
         const drain = status === 'recording' ? 0.2 : 0.5 
         const next = Math.max(0, prev - drain)
-        
         if (next === 0) {
           setGameStatus('lost')
           clearInterval(timer)
@@ -121,119 +106,74 @@ export default function ChatPage() {
         return next
       })
     }, 1000)
-
     return () => clearInterval(timer)
   }, [status, gameStatus])
 
-  // 4. Handle AI Response updates (Gamification Logic)
+  // Win Condition
+  useEffect(() => {
+    if (gameStatus === 'won' && scenario) {
+        const stars = patience > 80 ? 3 : patience > 50 ? 2 : 1
+        finishScenario(scenario.id, stars).then(res => {
+            if (res.loot) setWonLoot(res.loot)
+        })
+    }
+  }, [gameStatus])
+
+  // Response Handler
   const handleTurnResponse = (response: TurnResponse) => {
-    // Update Sentiment / Patience
-    if (response.sentiment_score !== null && response.sentiment_score !== undefined) {
+    if (response.sentiment_score !== null) {
       setLastSentiment(response.sentiment_score)
       setPatience(prev => {
-        // Sentiment -1.0 removes 15%, +1.0 adds 5%
-        // If negative, damage is high. If positive, healing is small.
         const impact = response.sentiment_score! * (response.sentiment_score! < 0 ? 15 : 5)
         return Math.min(100, Math.max(0, prev + impact))
       })
     }
-
-    // Update Price (For Market Scenarios)
-    if (response.negotiated_price !== null && response.negotiated_price !== undefined) {
+    if (response.negotiated_price !== null) {
       setCurrentPrice(response.negotiated_price)
-
-    if (response.cultural_flag) {
-        setCulturalFeedback(response.cultural_feedback || "You broke a cultural rule!")
-        // Optional: Damage patience heavily
-        setPatience(prev => Math.max(0, prev - 25))
-    }
-      
-      // Check Win Condition
       if (scenario?.haggle_settings && response.negotiated_price <= scenario.haggle_settings.target_price) {
         setGameStatus('won')
       }
     }
-  }
-
-  useEffect(() => {
-    if (gameStatus === 'won' && scenario) {
-        // Calculate stars based on patience left
-        const stars = patience > 80 ? 3 : patience > 50 ? 2 : 1
-        
-        finishScenario(scenario.id, stars).then(res => {
-            if (res.loot) {
-                setWonLoot(res.loot) // Triggers ProverbCard
-            }
-        })
+    if (response.cultural_flag) {
+        setCulturalFeedback(response.cultural_feedback || "You broke a cultural rule!")
+        setPatience(prev => Math.max(0, prev - 25))
     }
-}, [gameStatus])
-
-
-  // Scroll to bottom helper
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  useEffect(() => {
-    scrollToBottom()
-  }, [turns])
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  useEffect(() => scrollToBottom(), [turns])
 
-  // Audio Playback
   const playAudio = (url: string, turnNumber: number) => {
-    if (audioElementRef.current) {
-      audioElementRef.current.pause()
-    }
-
+    if (audioElementRef.current) audioElementRef.current.pause()
     const audio = new Audio(url)
     audioElementRef.current = audio
     setAudioPlaying(true)
     setPlayingTurnNumber(turnNumber)
-
-    audio.onended = () => {
-      setAudioPlaying(false)
-      setPlayingTurnNumber(null)
-    }
-
-    audio.onerror = () => {
-      setAudioPlaying(false)
-      setPlayingTurnNumber(null)
-      setError('Failed to play audio')
-    }
-
-    audio.play().catch((err) => {
-      setAudioPlaying(false)
-      setPlayingTurnNumber(null)
-      setError('Audio playback failed: ' + err.message)
-    })
+    audio.onended = () => { setAudioPlaying(false); setPlayingTurnNumber(null) }
+    audio.onerror = () => { setAudioPlaying(false); setPlayingTurnNumber(null); setError('Failed to play audio') }
+    audio.play().catch((err) => { setAudioPlaying(false); setPlayingTurnNumber(null); setError('Playback failed') })
   }
 
-  // Send Audio Handler
   const sendAudio = async () => {
     if (!mediaBlobUrl || !conversationId || gameStatus !== 'active') return
-
     setLoading(true)
     setError(null)
-
     try {
-      setProcessingStage("Uploading audio...")
+      setProcessingStage("Processing...")
       const blob = await fetch(mediaBlobUrl).then((r) => r.blob())
-      
-      setProcessingStage("Processing your speech...")
       const response = await sendTurn(conversationId, blob)
-      
-      setProcessingStage("Generating response...")
-      
-      // Cast response to include gamification fields
-      const fullResponse = response as Turn
-      
-      setTurns(prev => [...prev, fullResponse])
+      setTurns(prev => {
+        const r = response as Turn
+        const idx = prev.findIndex(t => t.turn_number === r.turn_number)
+        if (idx !== -1) {
+          const next = prev.slice()
+          next[idx] = r
+          return next
+        }
+        return [...prev, r]
+      })
       handleTurnResponse(response)
-      
-      // Auto-play AI response
-      if (response.ai_audio_url) {
-        playAudio(response.ai_audio_url, response.turn_number)
-      }
-      
+      if (response.ai_audio_url) playAudio(response.ai_audio_url, response.turn_number)
       clearBlobUrl()
     } catch (err: any) {
       setError(err.message || 'Failed to send audio')
@@ -243,326 +183,240 @@ export default function ChatPage() {
     }
   }
 
-  // Toggles
   const toggleTranslation = (turnNumber: number) => {
-    setShowTranslation(prev => ({
-      ...prev,
-      [turnNumber]: !prev[turnNumber]
-    }))
+    setShowTranslation(prev => ({ ...prev, [turnNumber]: !prev[turnNumber] }))
   }
-
   const toggleCorrection = (turnNumber: number) => {
-    setShowCorrection(prev => ({
-      ...prev,
-      [turnNumber]: !prev[turnNumber]
-    }))
+    setShowCorrection(prev => ({ ...prev, [turnNumber]: !prev[turnNumber] }))
   }
-
-  // Save Word Handler
   const handleSaveWord = async (turn: Turn) => {
     if (!turn.ai_text_english) return
-    
     setSavingWord(prev => ({ ...prev, [turn.turn_number]: true }))
-    
     try {
-      await saveWord(
-        turn.ai_text,
-        turn.ai_text_english,
-        turn.ai_text
-      )
-      alert('Word saved to vocabulary!')
+      await saveWord(turn.ai_text, turn.ai_text_english, turn.ai_text)
+      // We might want a toast here
     } catch (err: any) {
-      if (err.message.includes('already saved')) {
-        alert('This phrase is already in your vocabulary')
-      } else {
-        alert('Failed to save word: ' + err.message)
-      }
+      console.error(err)
     } finally {
       setSavingWord(prev => ({ ...prev, [turn.turn_number]: false }))
     }
   }
 
-  if (loadingHistory) {
-    return (
-      <div className="flex flex-col h-screen bg-gray-50 items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading conversation...</p>
+  if (loadingHistory) return (
+    <div className="flex flex-col h-screen bg-naija-paper items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-naija-primary mx-auto mb-4"></div>
+      <p className="text-naija-dark font-medium">Loading conversation...</p>
+    </div>
+  )
+
+  return (
+      <div className="flex flex-col h-screen bg-naija-paper bg-ankara-pattern">
+        <CulturalAlert feedback={culturalFeedback} />
+        {wonLoot && <ProverbCard proverb={wonLoot} onClose={() => setWonLoot(null)} />}
+  
+        {/* 1. Header: Glassmorphism effect */}
+        <div className="bg-white/90 backdrop-blur-md border-b border-gray-200 px-4 py-3 shadow-sm sticky top-0 z-20">
+          <div className="max-w-3xl mx-auto flex items-center justify-between">
+            <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-gray-100 rounded-full transition group">
+              <i className="ph-bold ph-arrow-left text-xl text-naija-dark group-hover:-translate-x-1 transition-transform"></i>
+            </button>
+            <div className="text-center">
+              {/* Font Display for bold cultural feel */}
+              <h1 className="font-display font-bold text-lg text-naija-dark leading-tight">{scenario?.title}</h1>
+              <div className="flex items-center justify-center gap-1.5 mt-0.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-naija-primary"></span>
+                </span>
+                <span className="text-xs text-gray-500 font-medium tracking-wide uppercase">Live Scenario</span>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowHints(!showHints)} 
+              className={`p-2 rounded-full transition-all ${showHints ? 'bg-naija-adire text-white shadow-lg shadow-indigo-500/30' : 'hover:bg-gray-100 text-naija-adire'}`}
+            >
+              <i className={`ph-fill ph-lightbulb text-xl ${showHints ? 'animate-pulse' : ''}`}></i>
+            </button>
+          </div>
+        </div>
+  
+        {/* 2. Gamification Bar */}
+        <div className="bg-white/80 backdrop-blur border-b border-gray-100 px-4 py-2 sticky top-[62px] z-10">
+          <div className="max-w-3xl mx-auto">
+             <PatienceMeter level={patience} sentiment={lastSentiment} isRecording={status === 'recording'} />
+          </div>
+        </div>
+  
+        {/* 3. Hints Drawer */}
+        {showHints && scenario?.key_vocabulary && (
+          <div className="bg-naija-adire text-white p-4 animate-in slide-in-from-top-2 border-b border-indigo-900 sticky top-[110px] z-10 shadow-xl">
+              <div className="max-w-3xl mx-auto">
+                  <h3 className="font-display font-bold mb-3 text-sm uppercase tracking-widest text-indigo-200">Cheat Sheet</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {scenario.key_vocabulary.map((vocab, i) => (
+                          <div key={i} className="flex justify-between items-center bg-white/10 p-2 rounded-lg backdrop-blur-sm border border-white/10">
+                              <span className="font-bold">{vocab.word}</span>
+                              <span className="text-sm opacity-80">{vocab.meaning}</span>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+        )}
+  
+        {/* Ticker Overlay */}
+        {scenario?.category === 'Market' && scenario.haggle_settings && currentPrice !== null && (
+            <div className="absolute top-32 right-4 z-20 w-40 animate-in slide-in-from-right fade-in duration-500">
+                 <HaggleTicker currentPrice={currentPrice} startPrice={scenario.haggle_settings.start_price} targetPrice={scenario.haggle_settings.target_price} />
+            </div>
+        )}
+  
+        {/* 4. Chat Area: Updated Bubbles */}
+        <div className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
+          <div className="max-w-3xl mx-auto space-y-8">
+            
+            {/* Mission Capsule */}
+            <div className="flex justify-center">
+                <span className="bg-white/80 backdrop-blur-sm border border-gray-200 px-4 py-1.5 rounded-full text-xs text-gray-500 font-medium shadow-sm">
+                    🎯 Mission: {scenario?.mission?.objective}
+                </span>
+            </div>
+  
+            {turns.map((turn) => (
+              <div key={turn.turn_number} className="space-y-6">
+                  {/* User Message (Right) - Using Naija Adire Color */}
+                  <div className="flex flex-col items-end pl-12">
+                      <div className="bg-naija-adire text-white rounded-2xl rounded-tr-sm px-6 py-4 shadow-lg shadow-indigo-900/10 border border-indigo-900 relative group">
+                          <p className="text-base font-sans leading-relaxed">{turn.transcription}</p>
+                          
+                          {/* Grammar Badge */}
+                          {turn.grammar_score && turn.grammar_score < 10 && (
+                              <button 
+                                  onClick={() => toggleCorrection(turn.turn_number)} 
+                                  className="absolute -bottom-3 -right-2 bg-red-50 text-red-600 text-[10px] font-bold px-2 py-1 rounded-full border border-red-100 shadow-sm hover:scale-105 transition-transform flex items-center gap-1"
+                              >
+                                  <i className="ph-bold ph-warning-circle"></i> Fix Grammar
+                              </button>
+                          )}
+                      </div>
+                      {showCorrection[turn.turn_number] && (
+                          <div className="mt-4 mr-2 bg-white border-l-4 border-red-400 p-4 rounded-r-xl shadow-md text-sm text-gray-700 animate-in fade-in slide-in-from-top-2 max-w-sm">
+                              <span className="block text-xs font-bold text-red-500 uppercase tracking-wider mb-1">Correction</span>
+                              {turn.correction}
+                          </div>
+                      )}
+                  </div>
+  
+                  {/* AI Message (Left) */}
+                  <div className="flex flex-col items-start pr-12">
+                      <div className="flex items-end gap-3">
+                          {/* Avatar */}
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-naija-primary to-green-800 flex items-center justify-center text-white font-bold ring-4 ring-white shadow-md z-10">
+                              AI
+                          </div>
+                          <div className="bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-tl-sm px-6 py-4 shadow-lg shadow-gray-200/50 relative">
+                              <p className="text-base font-sans leading-relaxed">{turn.ai_text}</p>
+                              
+                              {/* Action Bar */}
+                              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50">
+                                  <button 
+                                      onClick={() => playAudio(turn.ai_audio_url, turn.turn_number)} 
+                                      disabled={audioPlaying && playingTurnNumber === turn.turn_number}
+                                      className={`p-2 rounded-full transition-colors ${audioPlaying && playingTurnNumber === turn.turn_number ? 'bg-naija-primary text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                                  >
+                                      <i className={`ph-fill ${audioPlaying && playingTurnNumber === turn.turn_number ? 'ph-pause' : 'ph-speaker-high'}`}></i>
+                                  </button>
+                                  <button 
+                                      onClick={() => toggleTranslation(turn.turn_number)} 
+                                      className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-bold text-gray-500 uppercase tracking-wide transition-colors"
+                                  >
+                                      Translate
+                                  </button>
+                                  {turn.ai_text_english && (
+                                      <button 
+                                          onClick={() => handleSaveWord(turn)}
+                                          disabled={savingWord[turn.turn_number]}
+                                          className="ml-auto text-gray-400 hover:text-naija-adire transition-colors"
+                                      >
+                                          <i className={`ph-fill ${savingWord[turn.turn_number] ? 'ph-check' : 'ph-bookmark-simple'} text-lg`}></i>
+                                      </button>
+                                  )}
+                              </div>
+                          </div>
+                      </div>
+                      
+                      {showTranslation[turn.turn_number] && (
+                          <div className="mt-3 ml-14 p-4 bg-yellow-50/80 border border-yellow-100 rounded-xl text-sm text-yellow-900 animate-in fade-in slide-in-from-top-1 backdrop-blur-sm">
+                              <span className="block text-xs font-bold text-yellow-600 uppercase mb-1 opacity-75">English</span>
+                              {turn.ai_text_english}
+                          </div>
+                      )}
+                  </div>
+              </div>
+            ))}
+            
+            {/* Loading Indicator */}
+            {loading && (
+                <div className="flex justify-start pl-12 animate-pulse">
+                    <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-6 py-4 flex gap-1.5 items-center">
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></span>
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></span>
+                        <span className="ml-2 text-xs font-medium text-gray-500 uppercase tracking-wide">{processingStage || 'Thinking'}</span>
+                    </div>
+                </div>
+            )}
+            
+            <div ref={messagesEndRef} className="h-4" />
+          </div>
+        </div>
+  
+        {/* 5. Footer: Dynamic Island Input */}
+        <div className="bg-white border-t border-gray-200 p-4 safe-area-bottom shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
+            <div className="max-w-3xl mx-auto flex items-center gap-4">
+                {/* Dynamic Island Recorder */}
+                <div className={`flex-1 h-16 rounded-[2rem] border-2 flex items-center px-6 justify-between relative overflow-hidden transition-all duration-300 ${status === 'recording' ? 'bg-red-50 border-red-100 shadow-inner' : 'bg-gray-50 border-transparent'}`}>
+                    {status === 'recording' ? (
+                        <>
+                            <div className="flex items-center gap-3 z-10">
+                                <span className="relative flex h-3 w-3">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                                </span>
+                                <span className="text-red-600 font-bold font-display tracking-wide">Recording...</span>
+                            </div>
+                            {/* Audio Waves Visualizer */}
+                            <div className="flex gap-1 h-8 items-center z-10">
+                                {[...Array(12)].map((_, i) => (
+                                    <div key={i} className="w-1.5 bg-red-400/60 rounded-full animate-[bounce_1s_infinite]" style={{height: `${20 + Math.random() * 80}%`, animationDelay: `${i * 0.05}s`}}></div>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <span className="text-gray-400 font-medium">Tap microphone to speak...</span>
+                    )}
+                </div>
+  
+                {/* Action Button */}
+                {status === 'recording' ? (
+                    <button onClick={stopRecording} className="h-16 w-16 bg-red-500 hover:bg-red-600 text-white rounded-[2rem] flex items-center justify-center shadow-lg shadow-red-500/30 transition-all transform hover:scale-105 active:scale-95 group">
+                        <i className="ph-fill ph-stop text-2xl group-hover:scale-110 transition-transform"></i>
+                    </button>
+                ) : (
+                    <button onClick={startRecording} disabled={loading} className="h-16 w-16 bg-naija-primary hover:bg-green-700 text-white rounded-[2rem] flex items-center justify-center shadow-lg shadow-green-600/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed group">
+                        <i className="ph-fill ph-microphone text-2xl group-hover:scale-110 transition-transform"></i>
+                    </button>
+                )}
+                
+                 <button 
+                  onClick={sendAudio} 
+                  disabled={!mediaBlobUrl || loading} 
+                  className={`h-16 w-16 rounded-[2rem] flex items-center justify-center shadow-lg transition-all transform hover:scale-105 active:scale-95 ${mediaBlobUrl ? 'bg-naija-adire text-white cursor-pointer shadow-indigo-500/30' : 'bg-gray-100 text-gray-300 cursor-not-allowed shadow-none'}`}
+                 >
+                    <i className="ph-fill ph-paper-plane-right text-2xl"></i>
+                </button>
+            </div>
         </div>
       </div>
     )
-  }
-
-  return (
-    <>
-    <CulturalAlert feedback={culturalFeedback} />
-    {wonLoot && <ProverbCard proverb={wonLoot} onClose={() => setWonLoot(null)} />}
-    <div className="flex flex-col h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="text-blue-600 hover:text-blue-700 font-medium"
-          >
-            ← Back to Dashboard
-          </button>
-          <div className="text-center">
-            <h1 className="text-lg font-semibold text-gray-900">
-              {scenario?.title || 'Conversation'}
-            </h1>
-            {scenario?.mission && (
-              <p className="text-xs text-gray-500 mt-1">🎯 {scenario.mission.objective}</p>
-            )}
-          </div>
-          <button
-            onClick={() => setShowHints(!showHints)}
-            className="text-purple-600 hover:text-purple-700 font-medium text-sm px-3 py-1 rounded-lg hover:bg-purple-50 transition"
-          >
-            💡 {showHints ? 'Hide' : 'Hints'}
-          </button>
-        </div>
-      </div>
-
-      {/* GAMIFICATION HUD */}
-      <div className="bg-white border-b border-gray-200 px-4 pt-4 pb-2 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-4xl mx-auto">
-          
-          {/* Status Messages */}
-          {gameStatus === 'lost' && (
-            <div className="bg-red-600 text-white p-3 rounded-lg text-center mb-4 font-bold animate-pulse">
-              💔 SESSION FAILED: The seller lost patience!
-            </div>
-          )}
-          {gameStatus === 'won' && (
-            <div className="bg-green-600 text-white p-3 rounded-lg text-center mb-4 font-bold animate-bounce">
-              🏆 SUCCESS: You got the deal!
-            </div>
-          )}
-
-          {/* Patience Meter (Always visible) */}
-          <PatienceMeter 
-            level={patience} 
-            sentiment={lastSentiment} 
-            isRecording={status === 'recording'}
-          />
-
-          {/* Haggle Ticker (Only for Market Scenarios) */}
-          {scenario?.category === 'Market' && scenario.haggle_settings && currentPrice !== null && (
-            <HaggleTicker
-              currentPrice={currentPrice}
-              startPrice={scenario.haggle_settings.start_price}
-              targetPrice={scenario.haggle_settings.target_price}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Hints Panel */}
-      {showHints && scenario?.key_vocabulary && scenario.key_vocabulary.length > 0 && (
-        <div className="bg-purple-50 border-b border-purple-200 animate-in slide-in-from-top duration-300">
-          <div className="max-w-4xl mx-auto px-4 py-4">
-            <h3 className="font-semibold text-purple-900 mb-3">📚 Key Vocabulary</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {scenario.key_vocabulary.map((vocab, index) => (
-                <div key={index} className="bg-white rounded-lg px-3 py-2 flex justify-between items-center shadow-sm">
-                  <span className="font-medium text-gray-900">{vocab.word}</span>
-                  <span className="text-gray-600 text-sm">{vocab.meaning}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Chat messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
-        <div className="max-w-4xl mx-auto space-y-6">
-          {turns.map((turn) => (
-            <div key={turn.turn_number} className="space-y-4">
-              {/* User message */}
-              <div className="flex justify-end">
-                <div className="max-w-[85%] sm:max-w-[70%]">
-                  <div className="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 shadow-md">
-                    <p className="text-sm">{turn.transcription}</p>
-                  </div>
-                  {turn.correction && turn.grammar_score && turn.grammar_score < 8 && (
-                    <div className="mt-2 flex flex-col items-end">
-                      <button
-                        onClick={() => toggleCorrection(turn.turn_number)}
-                        className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center bg-amber-50 px-2 py-1 rounded-md"
-                      >
-                        ✨ Grammar feedback
-                      </button>
-                      {showCorrection[turn.turn_number] && (
-                        <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-900 w-full animate-in fade-in">
-                          {turn.correction}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* AI message */}
-              <div className="flex justify-start">
-                <div className="max-w-[85%] sm:max-w-[70%]">
-                  <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
-                    <div className="flex items-center gap-2 mb-2">
-                      {audioPlaying && playingTurnNumber === turn.turn_number && (
-                        <span className="text-xs text-blue-600 animate-pulse font-semibold">🔊 Speaking...</span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-900 leading-relaxed">{turn.ai_text}</p>
-                    <div className="mt-3 flex items-center gap-2 flex-wrap border-t border-gray-100 pt-2">
-                      {turn.ai_audio_url && (
-                        <button
-                          onClick={() => playAudio(turn.ai_audio_url, turn.turn_number)}
-                          disabled={audioPlaying && playingTurnNumber === turn.turn_number}
-                          className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-                        >
-                          {audioPlaying && playingTurnNumber === turn.turn_number ? '⏸ Playing...' : '🔊 Replay'}
-                        </button>
-                      )}
-                      {!turn.ai_audio_url && turn.audio_error && (
-                        <span className="text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-full font-medium">
-                          {turn.audio_error.includes('timeout')
-                            ? 'Audio timed out'
-                            : turn.audio_error.includes('model_overloaded')
-                              ? 'Service busy'
-                              : 'Audio unavailable'}
-                        </span>
-                      )}
-                      <button
-                        onClick={() => toggleTranslation(turn.turn_number)}
-                        className="text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-full hover:bg-gray-100 font-medium transition-colors"
-                      >
-                        {showTranslation[turn.turn_number] ? 'Hide translation' : '🌐 Translation'}
-                      </button>
-                      {turn.ai_text_english && (
-                        <button
-                          onClick={() => handleSaveWord(turn)}
-                          disabled={savingWord[turn.turn_number]}
-                          className="text-xs bg-purple-50 text-purple-600 px-3 py-1.5 rounded-full hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-                        >
-                          {savingWord[turn.turn_number] ? 'Saving...' : '📚 Save'}
-                        </button>
-                      )}
-                    </div>
-                    {showTranslation[turn.turn_number] && turn.ai_text_english && (
-                      <div className="mt-2 text-xs text-gray-600 italic bg-gray-50 p-2 rounded-md animate-in fade-in">
-                        <span className="font-medium text-gray-500">Meaning:</span> {turn.ai_text_english}
-                      </div>
-                    )}
-                  </div>
-                  {turn.grammar_score === 10 && (
-                    <div className="mt-1 text-xs text-green-600 flex items-center gap-1 font-medium px-2">
-                      ✓ Perfect grammar!
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-          
-          {/* Processing indicator (thinking bubble) */}
-          {processingStage && (
-            <div className="flex justify-start">
-              <div className="max-w-[70%]">
-                <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                    </div>
-                    <span className="text-sm text-gray-600 font-medium animate-pulse">{processingStage}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </div>
-      </div>
-
-      {/* Input area */}
-      <div className={`bg-white border-t border-gray-200 px-4 py-4 ${gameStatus !== 'active' ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
-        <div className="max-w-4xl mx-auto">
-          {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-800 text-sm flex items-center justify-between">
-              <span>{error}</span>
-              <button onClick={() => setError(null)} className="text-red-600 font-bold">✕</button>
-            </div>
-          )}
-
-          <div className="flex items-center gap-3">
-            {/* Recording status with visualizer */}
-            <div className="flex-1 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200 shadow-inner">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">
-                  Status: <span className={status === 'recording' ? 'text-red-600 font-bold' : 'text-gray-600'}>{status === 'recording' ? 'Recording...' : 'Ready'}</span>
-                </span>
-                {status === 'recording' && (
-                  <span className="flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                  </span>
-                )}
-              </div>
-              {/* Audio visualizer bars */}
-              {status === 'recording' ? (
-                <div className="flex items-center justify-center gap-1 h-8">
-                  {[...Array(12)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="w-1.5 bg-gradient-to-t from-red-500 to-red-400 rounded-full"
-                      style={{
-                        height: '100%',
-                        animation: `pulse ${0.5 + Math.random() * 0.5}s ease-in-out infinite`,
-                        animationDelay: `${i * 0.05}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-1 h-8 opacity-20">
-                   {[...Array(12)].map((_, i) => (
-                    <div key={i} className="w-1.5 bg-gray-400 rounded-full h-1" />
-                   ))}
-                </div>
-              )}
-            </div>
-
-            {/* Control buttons */}
-            <button
-              onClick={startRecording}
-              disabled={status === 'recording' || loading}
-              className="bg-green-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-md active:transform active:scale-95 flex items-center gap-2"
-            >
-              🎤 Record
-            </button>
-            
-            <button
-              onClick={stopRecording}
-              disabled={status !== 'recording'}
-              className="bg-red-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-md active:transform active:scale-95"
-            >
-              ⏹ Stop
-            </button>
-            
-            <button
-              onClick={sendAudio}
-              disabled={!mediaBlobUrl || loading}
-              className="bg-blue-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-md active:transform active:scale-95 flex items-center gap-2"
-            >
-              {loading ? '⏳ Sending...' : '📤 Send'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-    </>
-  )
 }

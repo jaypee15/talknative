@@ -1,9 +1,10 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import OnboardingPage from './pages/OnboardingPage'
-import DashboardPage from './pages/DashboardPage'
 import ChatPage from './pages/ChatPage'
 import RequireAuth from './components/RequireAuth'
+import MapDashboard from './pages/MapDashboard'
+import WisdomDeckPage from './pages/WisdomDeckPage'
 
 export default function App() {
   return (
@@ -24,7 +25,15 @@ export default function App() {
         path="/dashboard"
         element={
           <RequireAuth>
-            <DashboardPage />
+            <MapDashboard />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/wisdom"
+        element={
+          <RequireAuth>
+            <WisdomDeckPage />
           </RequireAuth>
         }
       />

@@ -40,7 +40,6 @@
       "rarity": "common"
     },
   
-    /* IGBO PROVERBS (5) */
     {
       "id": "ig_1",
       "language": "igbo",
@@ -82,7 +81,6 @@
       "rarity": "common"
     },
   
-    /* HAUSA PROVERBS (5) */
     {
       "id": "ha_1",
       "language": "hausa",
