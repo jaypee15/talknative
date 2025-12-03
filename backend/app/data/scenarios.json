@@ -238,6 +238,7 @@
     "language": "igbo",
     "category": "Market",
     "title": "The Spare Parts Deal",
+    "level": 4,
     "difficulty": "advanced",
     "description": "You are at Ladipo Market buying a car part. The dealer is tough.",
     "roles": {
@@ -261,6 +262,7 @@
     "language": "igbo",
     "category": "Greetings",
     "title": "Village Morning",
+    "level": 1,
     "difficulty": "beginner",
     "description": "It is morning in the village. You see an elder woman (Mama).",
     "roles": {
@@ -283,6 +285,7 @@
     "language": "igbo",
     "category": "Food",
     "title": "Eating Fufu",
+    "level": 3,
     "difficulty": "intermediate",
     "description": "You are at a restaurant. You want to eat Fufu (Akpu) with Egusi soup.",
     "roles": {
@@ -306,6 +309,7 @@
     "language": "igbo",
     "category": "Transport",
     "title": "Entering the Bus",
+    "level": 2,
     "difficulty": "beginner",
     "description": "You are catching a bus from Enugu to Onitsha.",
     "roles": {
@@ -328,6 +332,7 @@
     "language": "igbo",
     "category": "Social",
     "title": "Meeting the In-Laws",
+    "level": 5,
     "difficulty": "advanced",
     "description": "You are visiting your fiancée's father for the first time.",
     "roles": {
