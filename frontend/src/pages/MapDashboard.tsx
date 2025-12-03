@@ -2,17 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getScenarios, getUserProgress } from '../lib/api'
 
-// Visual Icons
-const Icons = {
-  Lock: () => <i className="ph-fill ph-lock-key text-2xl text-gray-400"></i>,
-  Star: ({ filled }: { filled: boolean }) => (
-    <i className={`ph-fill ph-star text-xs ${filled ? 'text-naija-secondary drop-shadow-sm' : 'text-gray-200'}`}></i>
-  ),
-  Airport: () => <span className="text-3xl filter drop-shadow-md">🛫</span>,
-  Bus: () => <span className="text-3xl filter drop-shadow-md">🚌</span>,
-  Market: () => <span className="text-3xl filter drop-shadow-md">🧺</span>,
-  Village: () => <span className="text-3xl filter drop-shadow-md">🛖</span>,
-}
+import { Lock, Star, Airplane, Bus, Basket, House, Cards } from '@phosphor-icons/react'
+
 
 export default function MapDashboard() {
   const [scenarios, setScenarios] = useState<any[]>([])
@@ -21,10 +12,10 @@ export default function MapDashboard() {
 
   useEffect(() => {
     Promise.all([getScenarios(), getUserProgress()]).then(([sData, pData]) => {
-      // Sort scenarios by level
-      const sorted = sData.sort((a: any, b: any) => a.level - b.level)
+      // Sort: Ensure scenarios with undefined levels go to the end, then sort by level
+      const sorted = sData.sort((a: any, b: any) => (a.level || 99) - (b.level || 99))
       setScenarios(sorted)
-      // Map progress array to object
+      
       const pMap = pData.reduce((acc: any, curr: any) => ({
         ...acc, [curr.scenario_id]: curr.stars
       }), {})
@@ -36,6 +27,21 @@ export default function MapDashboard() {
     if (index === 0) return true
     const prevId = scenarios[index - 1].id
     return (progress[prevId] || 0) >= 1
+  }
+
+  // Icons Helper
+  const renderIcon = (level: number, locked: boolean) => {
+    if (locked) return <Lock size={32} weight="fill" className="text-gray-400" />
+    
+    // Custom icons based on level/theme
+    switch(level) {
+        case 1: return <span className="text-3xl filter drop-shadow-md">👋</span> // Greetings
+        case 2: return <span className="text-3xl filter drop-shadow-md">🚌</span> // Transport
+        case 3: return <span className="text-3xl filter drop-shadow-md">🧺</span> // Market
+        case 4: return <span className="text-3xl filter drop-shadow-md">🍲</span> // Food
+        case 5: return <span className="text-3xl filter drop-shadow-md">🛖</span> // Village/Boss
+        default: return <span className="text-3xl filter drop-shadow-md">📍</span>
+    }
   }
 
   return (
@@ -53,19 +59,19 @@ export default function MapDashboard() {
             onClick={() => navigate('/wisdom')} 
             className="bg-white/10 hover:bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-2 border border-white/20 transition-all active:scale-95"
           >
-            <i className="ph-fill ph-cards text-naija-secondary text-xl"></i>
+            <Cards size={24} weight="fill" className="text-naija-secondary" />
             <span className="font-medium text-sm">Loot</span>
           </button>
         </div>
       </div>
 
       <div className="max-w-md mx-auto p-8 relative mt-8">
-        {/* Winding Road SVG Background */}
-        <svg className="absolute left-0 top-0 w-full h-full z-0 pointer-events-none opacity-20" preserveAspectRatio="none">
+        {/* Winding Road SVG Background - Tweaked Curve */}
+        <svg className="absolute left-0 top-0 w-full h-full z-0 pointer-events-none opacity-10" preserveAspectRatio="none">
           <path 
-            d="M50,0 C50,150 300,300 50,450 C-200,600 300,750 50,900 C-200,1050 300,1200 50,1350" 
+            d="M50,0 C50,100 250,200 50,350 C-150,500 250,650 50,800 C-150,950 250,1100 50,1250" 
             stroke="#2E7D32" 
-            strokeWidth="40" 
+            strokeWidth="60" 
             fill="none" 
             strokeDasharray="20 20" 
             strokeLinecap="round"
@@ -76,11 +82,11 @@ export default function MapDashboard() {
           {scenarios.map((scenario, index) => {
             const locked = !isUnlocked(index)
             const stars = progress[scenario.id] || 0
-            // Stagger nodes left and right to follow the "road"
+            // Zigzag logic
             const offsetClass = index % 2 === 0 ? 'translate-x-12' : '-translate-x-12'
             
             return (
-              <div key={scenario.id} className={`flex flex-col items-center ${offsetClass}`}>
+              <div key={scenario.id} className={`flex flex-col items-center ${offsetClass} transition-all duration-500`}>
                 
                 {/* Scenario Node */}
                 <button
@@ -95,17 +101,13 @@ export default function MapDashboard() {
                 >
                   {/* Un-rotate content */}
                   <div className="-rotate-45 flex flex-col items-center justify-center transform transition-transform group-hover:scale-110">
-                    {locked ? <Icons.Lock /> : (
-                      scenario.level === 1 ? <Icons.Airport /> :
-                      scenario.level === 2 ? <Icons.Bus /> :
-                      scenario.level === 3 ? <Icons.Market /> : <Icons.Village />
-                    )}
+                    {renderIcon(scenario.level, locked)}
                   </div>
                   
                   {/* Completion Checkmark */}
                   {stars >= 1 && (
                     <div className="absolute -top-3 -right-3 w-8 h-8 bg-naija-secondary rounded-full flex items-center justify-center -rotate-45 border-2 border-white shadow-sm z-20">
-                      <i className="ph-bold ph-check text-naija-dark text-sm"></i>
+                      <Star size={16} weight="fill" className="text-naija-dark" />
                     </div>
                   )}
                 </button>
@@ -113,7 +115,7 @@ export default function MapDashboard() {
                 {/* Label Badge */}
                 <div className={`
                   mt-8 px-5 py-3 bg-white rounded-2xl shadow-xl border border-gray-100 text-center min-w-[160px]
-                  transition-all duration-300 transform relative
+                  transition-all duration-300 transform relative z-20
                   ${locked ? 'opacity-50 grayscale' : 'hover:-translate-y-1'}
                 `}>
                   {/* Little arrow pointing up to diamond */}
@@ -122,7 +124,9 @@ export default function MapDashboard() {
                   <div className="font-bold text-naija-dark text-sm mb-1 font-display leading-tight">{scenario.title}</div>
                   {!locked && (
                     <div className="flex justify-center gap-1 bg-gray-50 rounded-full py-1 px-2 w-fit mx-auto border border-gray-100">
-                      {[1, 2, 3].map(i => <Icons.Star key={i} filled={i <= stars} />)}
+                      {[1, 2, 3].map(i => (
+                        <Star key={i} size={12} weight="fill" className={i <= stars ? "text-naija-secondary" : "text-gray-200"} />
+                      ))}
                     </div>
                   )}
                 </div>

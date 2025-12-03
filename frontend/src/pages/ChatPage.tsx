@@ -35,7 +35,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [processingStage, setProcessingStage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [, setError] = useState<string | null>(null)
   const [audioPlaying, setAudioPlaying] = useState(false)
   const [playingTurnNumber, setPlayingTurnNumber] = useState<number | null>(null)
   const [showTranslation, setShowTranslation] = useState<{[key: number]: boolean}>({})
@@ -151,7 +151,7 @@ export default function ChatPage() {
     setPlayingTurnNumber(turnNumber)
     audio.onended = () => { setAudioPlaying(false); setPlayingTurnNumber(null) }
     audio.onerror = () => { setAudioPlaying(false); setPlayingTurnNumber(null); setError('Failed to play audio') }
-    audio.play().catch((err) => { setAudioPlaying(false); setPlayingTurnNumber(null); setError('Playback failed') })
+    audio.play().catch((e) => { setAudioPlaying(false); setPlayingTurnNumber(null); setError(e?.message ? 'Playback failed: ' + e.message : 'Playback failed') })
   }
 
   const sendAudio = async () => {
