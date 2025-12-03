@@ -65,11 +65,6 @@ jobs:
             --min-instances=0 \
             --max-instances=10 \
       
-      - name: Get backend URL
-        id: backend-url
-        run: |
-          BACKEND_URL=$(gcloud run services describe talknative-backend --region=${{ secrets.GCP_REGION }} --format='value(status.url)')
-          echo "url=$BACKEND_URL" >> $GITHUB_OUTPUT
       
       - name: Deploy frontend
         run: |
@@ -82,10 +77,4 @@ jobs:
             --cpu=1 \
             --min-instances=0 \
             --max-instances=10 \
-            --set-env-vars=VITE_API_BASE_URL=${{ steps.backend-url.outputs.url }}
       
-      - name: Get frontend URL
-        run: |
-          FRONTEND_URL=$(gcloud run services describe talknative-frontend --region=${{ secrets.GCP_REGION }} --format='value(status.url)')
-          echo "Frontend deployed at: $FRONTEND_URL"
-          echo "Backend deployed at: ${{ steps.backend-url.outputs.url }}"
