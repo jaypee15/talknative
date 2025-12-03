@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getScenarios, getUserProgress } from '../lib/api'
+import { getScenarios, getUserProgress, getUserProfile } from '../lib/api'
 import { LockIcon, StarIcon, AirplaneIcon, BusIcon, BasketIcon, HouseIcon, CardsIcon, MapPinIcon } from '@phosphor-icons/react'
 
 
@@ -8,6 +8,14 @@ export default function MapDashboard() {
   const [scenarios, setScenarios] = useState<any[]>([])
   const [progress, setProgress] = useState<any>({})
   const navigate = useNavigate()
+
+  useEffect(() => {
+    getUserProfile().then((profile) => {
+      if (!profile.target_language || !profile.proficiency_level) {
+        navigate('/onboarding', { replace: true })
+      }
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     Promise.all([getScenarios(), getUserProgress()]).then(([sData, pData]) => {

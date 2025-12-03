@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate} from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function LoginPage() {
@@ -9,7 +9,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, user } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,72 +33,84 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            TalkNative
-          </h1>
-          <p className="text-gray-600">
-            Learn Nigerian languages through conversation
-          </p>
-        </div>
+    <div className="min-h-screen bg-naija-paper bg-ankara-pattern">
+      <div className="max-w-5xl mx-auto px-6 py-16">
+        <header className="flex items-center justify-between mb-12">
+          <h1 className="text-2xl font-display font-bold text-naija-dark">TalkNative</h1>
+          <button
+            onClick={() => navigate(user ? '/dashboard' : '/')}
+            className="px-4 py-2 rounded-lg bg-naija-primary text-white font-semibold hover:bg-green-700 transition"
+          >
+            {user ? 'Dashboard' : 'Home'}
+          </button>
+        </header>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="your@email.com"
-            />
+            <h2 className="text-3xl md:text-4xl font-display font-bold text-naija-dark leading-tight mb-4">
+              Sign in or create an account
+            </h2>
+            <p className="text-gray-700 text-lg">
+              Continue your journey and unlock new scenarios and wisdom cards.
+            </p>
           </div>
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="your@email.com"
+                />
+              </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="••••••••"
-            />
-          </div>
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="••••••••"
+                />
+              </div>
 
-          {error && (
-            <div className={`p-4 rounded-lg text-sm ${
-              error.includes('email') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-            }`}>
-              {error}
+              {error && (
+                <div className={`p-4 rounded-lg text-sm ${
+                  error.includes('email') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+                }`}>
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-naija-adire text-white py-3 rounded-lg font-semibold hover:opacity-90 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+              >
+                {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
+              </button>
+            </form>
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => setIsSignUp(!isSignUp)}
+                className="text-naija-adire hover:opacity-80 font-medium"
+              >
+                {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+              </button>
             </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
-          >
-            {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-blue-600 hover:text-blue-700 font-medium"
-          >
-            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-          </button>
+          </div>
         </div>
       </div>
     </div>

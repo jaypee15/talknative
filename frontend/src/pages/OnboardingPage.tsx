@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import { updateUserProfile, Language, Proficiency } from '../lib/api'
 
 export default function OnboardingPage() {
@@ -10,6 +11,7 @@ export default function OnboardingPage() {
   const [error, setError] = useState<string | null>(null)
   
   const navigate = useNavigate()
+  const { user } = useAuth()
 
   const languages: { value: Language; label: string; flag: string }[] = [
     { value: 'yoruba', label: 'Yoruba', flag: '🇳🇬' },
@@ -40,16 +42,27 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome to TalkNative!
-          </h1>
-          <p className="text-gray-600">
-            Let's personalize your learning experience
-          </p>
-        </div>
+    <div className="min-h-screen bg-naija-paper bg-ankara-pattern">
+      <div className="max-w-5xl mx-auto px-6 py-16">
+        <header className="flex items-center justify-between mb-12">
+          <h1 className="text-2xl font-display font-bold text-naija-dark">TalkNative</h1>
+          <button
+            onClick={() => navigate(user ? '/dashboard' : '/')}
+            className="px-4 py-2 rounded-lg bg-naija-primary text-white font-semibold hover:bg-green-700 transition"
+          >
+            {user ? 'Dashboard' : 'Home'}
+          </button>
+        </header>
+
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-display font-bold text-naija-dark mb-2">
+              Welcome to TalkNative!
+            </h1>
+            <p className="text-gray-700">
+              Let's personalize your learning experience
+            </p>
+          </div>
 
         {/* Progress indicator */}
         <div className="flex justify-center mb-8">
@@ -72,7 +85,7 @@ export default function OnboardingPage() {
                   onClick={() => setLanguage(lang.value)}
                   className={`p-6 rounded-xl border-2 transition-all ${
                     language === lang.value
-                      ? 'border-blue-600 bg-blue-50'
+                      ? 'border-naija-adire bg-indigo-50'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
@@ -86,7 +99,7 @@ export default function OnboardingPage() {
             <button
               onClick={() => setStep(2)}
               disabled={!language}
-              className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+              className="w-full mt-6 bg-naija-adire text-white py-3 rounded-lg font-semibold hover:opacity-90 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
             >
               Next
             </button>
@@ -105,7 +118,7 @@ export default function OnboardingPage() {
                   onClick={() => setProficiency(level.value)}
                   className={`p-6 rounded-xl border-2 transition-all text-left ${
                     proficiency === level.value
-                      ? 'border-blue-600 bg-blue-50'
+                      ? 'border-naija-adire bg-indigo-50'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
@@ -131,13 +144,14 @@ export default function OnboardingPage() {
               <button
                 onClick={handleSubmit}
                 disabled={!proficiency || loading}
-                className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+                className="flex-1 bg-naija-adire text-white py-3 rounded-lg font-semibold hover:opacity-90 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
               >
                 {loading ? 'Saving...' : 'Get Started'}
               </button>
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   )

@@ -11,7 +11,7 @@ VOICE_MAP = {
 
 async def synthesize_speech(text: str, language: str) -> bytes:
     voice_id = VOICE_MAP.get(language, "idera")
-    attempts = 2
+    attempts = 1
     for i in range(attempts):
         try:
             timeout = httpx.Timeout(connect=5.0, read=45.0, write=10.0, pool=5.0)

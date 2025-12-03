@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useReactMediaRecorder } from 'react-media-recorder'
-import { sendTurn, getConversationTurns, saveWord, getScenarioById, Scenario, TurnResponse, finishScenario } from '../lib/api'
+import { sendTurn, getConversationTurns, saveWord, getScenarioById, Scenario, TurnResponse, finishScenario, getUserProfile, startConversation } from '../lib/api'
 import PatienceMeter from '../components/PatienceMeter'
 import HaggleTicker from '../components/HaggleTicker'
 import CulturalAlert from '../components/CulturalAlert'
@@ -23,13 +23,22 @@ interface Turn {
 }
 
 export default function ChatPage() {
-  const { id: conversationId } = useParams<{ id: string }>()
+  const { id: scenarioIdParam } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const location = useLocation()
   
+  useEffect(() => {
+    getUserProfile().then((profile) => {
+      if (!profile.target_language || !profile.proficiency_level) {
+        navigate('/onboarding', { replace: true })
+      }
+    }).catch(() => {})
+  }, [])
+
   // Data State
   const [scenario, setScenario] = useState<Scenario | null>(null)
   const [turns, setTurns] = useState<Turn[]>([])
+  const [conversationId, setConversationId] = useState<string | null>(null)
   
   // UI State
   const [loading, setLoading] = useState(false)
@@ -62,20 +71,37 @@ export default function ChatPage() {
     }
   })
 
-  // Load History
+  // Initialize scenario and conversation
   useEffect(() => {
-    const loadData = async () => {
+    const sid = (location.state as any)?.scenarioId || scenarioIdParam
+    if (!sid) return
+    const init = async () => {
+      try {
+        setLoadingHistory(true)
+        const s = await getScenarioById(sid)
+        setScenario(s)
+        const started = await startConversation(sid)
+        setConversationId(started.conversation_id)
+        const history = await getConversationTurns(started.conversation_id)
+        setTurns(history as Turn[])
+      } catch (err: any) {
+        console.error('Failed to initialize chat:', err)
+        setError('Failed to initialize conversation')
+      } finally {
+        setLoadingHistory(false)
+      }
+    }
+    init()
+  }, [scenarioIdParam, location.state])
+
+  // Load history when conversationId changes
+  useEffect(() => {
+    const loadTurns = async () => {
       if (!conversationId) return
       try {
         setLoadingHistory(true)
         const history = await getConversationTurns(conversationId)
         setTurns(history as Turn[])
-        
-        const stateScenarioId = (location.state as any)?.scenarioId
-        if (stateScenarioId) {
-          const scenarioData = await getScenarioById(stateScenarioId)
-          setScenario(scenarioData)
-        }
       } catch (err: any) {
         console.error('Failed to load history:', err)
         setError('Failed to load conversation history')
@@ -83,8 +109,8 @@ export default function ChatPage() {
         setLoadingHistory(false)
       }
     }
-    loadData()
-  }, [conversationId, location.state])
+    loadTurns()
+  }, [conversationId])
 
   // Initialize Logic
   useEffect(() => {

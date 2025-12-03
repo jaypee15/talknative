@@ -38,7 +38,7 @@
       "success_condition": "User must reject the first price, claim it is too expensive ('O won'), and ask for 'Jara' (extra)."
     },
     "haggle_settings": {
-      "start_prie": 500,
+      "start_price": 5000,
       "target_price": 3000,
       "reserve_price": 2800
     },

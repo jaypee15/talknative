@@ -1,16 +1,22 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { getUserProfile } from '../lib/api'
 
 export default function LandingPage() {
   const navigate = useNavigate()
-  const { user, loading } = useAuth()
+  const { user } = useAuth()
+  const [onboarded, setOnboarded] = useState<boolean | null>(null)
 
   useEffect(() => {
-    if (!loading && user) {
-      navigate('/dashboard', { replace: true })
+    if (!user) {
+      setOnboarded(null)
+      return
     }
-  }, [user, loading])
+    getUserProfile()
+      .then(p => setOnboarded(Boolean(p.target_language && p.proficiency_level)))
+      .catch(() => setOnboarded(null))
+  }, [user])
 
   return (
     <div className="min-h-screen bg-naija-paper bg-ankara-pattern">
@@ -18,10 +24,10 @@ export default function LandingPage() {
         <header className="flex items-center justify-between mb-16">
           <h1 className="text-2xl font-display font-bold text-naija-dark">TalkNative</h1>
           <button
-            onClick={() => navigate('/login')}
+            onClick={() => navigate(user ? (onboarded ? '/dashboard' : '/onboarding') : '/login')}
             className="px-4 py-2 rounded-lg bg-naija-primary text-white font-semibold hover:bg-green-700 transition"
           >
-            Sign In
+            {user ? (onboarded ? 'Dashboard' : 'Onboarding') : 'Sign In'}
           </button>
         </header>
 
@@ -35,10 +41,10 @@ export default function LandingPage() {
             </p>
             <div className="flex gap-3">
               <button
-                onClick={() => navigate('/login')}
+                onClick={() => navigate(user ? (onboarded ? '/dashboard' : '/onboarding') : '/login')}
                 className="px-6 py-3 rounded-xl bg-naija-adire text-white font-bold hover:opacity-90 transition"
               >
-                Get Started
+                {user ? (onboarded ? 'Dashboard' : 'Onboarding') : 'Get Started'}
               </button>
               <button
                 onClick={() => navigate('/dashboard')}

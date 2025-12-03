@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getWisdomDeck } from '../lib/api'
+import { getWisdomDeck, getUserProfile } from '../lib/api'
 
 export default function WisdomDeckPage() {
   const [cards, setCards] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const navigate = useNavigate()
+
+  useEffect(() => {
+    getUserProfile().then((profile) => {
+      if (!profile.target_language || !profile.proficiency_level) {
+        navigate('/onboarding', { replace: true })
+      }
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
     setLoading(true)
