@@ -63,6 +63,7 @@ backend/
     core/
       auth.py
       config.py
+      logging.py
       storage.py
       supabase_client.py
     data/
@@ -114,6 +115,7 @@ frontend/
     pages/
       ChatPage.tsx
       DashboardPage.tsx
+      LandingPage.tsx
       LoginPage.tsx
       MapDashboard.tsx
       OnboardingPage.tsx
@@ -127,6 +129,7 @@ frontend/
   Dockerfile
   Dockerfile.dev
   index.html
+  nginx.conf
   package.json
   postcss.config.js
   tailwind.config.js
@@ -144,61 +147,6 @@ START_HERE.md
 ```
 
 # Files
-
-## File: frontend/src/components/ProverbCard.tsx
-````typescript
-interface Proverb {
-    content: string
-    literal_translation: string
-    meaning: string
-    rarity: 'common' | 'rare' | 'legendary'
-  }
-  
-  export default function ProverbCard({ proverb, onClose }: { proverb: Proverb, onClose: () => void }) {
-    const getColors = () => {
-      if (proverb.rarity === 'legendary') return 'from-yellow-400 to-yellow-600 border-yellow-200'
-      if (proverb.rarity === 'rare') return 'from-purple-400 to-purple-600 border-purple-200'
-      return 'from-gray-100 to-gray-300 border-gray-400 text-gray-800'
-    }
-  
-    return (
-      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 backdrop-blur-sm p-4">
-        <div className={`w-full max-w-sm bg-gradient-to-br ${getColors()} p-1 rounded-2xl shadow-2xl transform transition-all animate-card-reveal`}>
-          <div className="bg-white/95 rounded-xl p-6 h-full text-center relative overflow-hidden">
-            {/* Rarity Badge */}
-            <div className="absolute top-4 right-4 text-xs font-bold uppercase tracking-widest opacity-50">
-              {proverb.rarity}
-            </div>
-  
-            <div className="mb-6 mt-4">
-              <h2 className="text-3xl font-bold mb-4 font-serif text-gray-900">{proverb.content}</h2>
-              <p className="text-sm text-gray-500 italic mb-6">"{proverb.literal_translation}"</p>
-            </div>
-  
-            <div className="bg-black/5 p-4 rounded-lg mb-6">
-              <p className="text-xs uppercase font-bold text-gray-500 mb-1">Deep Meaning</p>
-              <p className="text-gray-800 font-medium">{proverb.meaning}</p>
-            </div>
-  
-            <button 
-              onClick={onClose}
-              className="w-full bg-black text-white py-3 rounded-lg font-bold hover:bg-gray-900 transition"
-            >
-              Collect Wisdom
-            </button>
-          </div>
-        </div>
-        <style>{`
-          @keyframes card-reveal {
-            0% { opacity: 0; transform: translateY(50px) rotateY(90deg); }
-            100% { opacity: 1; transform: translateY(0) rotateY(0); }
-          }
-          .animate-card-reveal { animation: card-reveal 0.8s ease-out; }
-        `}</style>
-      </div>
-    )
-  }
-````
 
 ## File: backend/alembic/versions/001_initial_migration.py
 ````python
@@ -656,87 +604,40 @@ async def delete_saved_word(
     return None
 ````
 
-## File: backend/app/core/storage.py
+## File: backend/app/core/logging.py
 ````python
-"""Supabase Storage helper for audio uploads."""
+import logging
+from logging.config import dictConfig
 
-import os
-from typing import Optional
-from app.core.supabase_client import supabase
-from app.core.config import settings
 
-class StorageManager:
-    """Manage audio file uploads to Supabase Storage."""
-    
-    def __init__(self):
-        self.bucket_name = settings.SUPABASE_BUCKET_NAME
-    
-    def _get_object_key(
-        self,
-        user_id: str,
-        conversation_id: str,
-        turn_number: int,
-        file_type: str  # 'user' or 'ai'
-    ) -> str:
-        """
-        Generate standardized object key for audio files.
-        
-        Pattern: {user_id}/{conversation_id}/{turn_number}/{type}.webm
-        """
-        extension = "webm"  # Default, can be made dynamic
-        return f"{user_id}/{conversation_id}/{turn_number}/{file_type}.{extension}"
-    
-    async def upload_audio(
-        self,
-        audio_data: bytes,
-        user_id: str,
-        conversation_id: str,
-        turn_number: int,
-        file_type: str  # 'user' or 'ai'
-    ) -> Optional[str]:
-        """
-        Upload audio to Supabase Storage and return public URL.
-        
-        Returns:
-            Public URL of the uploaded file, or None if upload fails
-        """
-        try:
-            object_key = self._get_object_key(user_id, conversation_id, turn_number, file_type)
-            
-            # Upload to Supabase Storage
-            response = supabase.storage.from_(self.bucket_name).upload(
-                path=object_key,
-                file=audio_data,
-                file_options={"content-type": "audio/webm"}
-            )
-            
-            # Get public URL
-            public_url = supabase.storage.from_(self.bucket_name).get_public_url(object_key)
-            
-            return public_url
-            
-        except Exception as e:
-            print(f"Error uploading audio to Supabase Storage: {e}")
-            return None
-    
-    async def delete_audio(
-        self,
-        user_id: str,
-        conversation_id: str,
-        turn_number: int,
-        file_type: str
-    ) -> bool:
-        """Delete audio file from storage."""
-        try:
-            object_key = self._get_object_key(user_id, conversation_id, turn_number, file_type)
-            supabase.storage.from_(self.bucket_name).remove([object_key])
-            return True
-        except Exception as e:
-            print(f"Error deleting audio: {e}")
-            return False
+def configure_logging(level: str = "INFO") -> None:
+    lvl = level.upper()
+    dictConfig(
+        {
+            "version": 1,
+            "disable_existing_loggers": False,
+            "formatters": {
+                "default": {
+                    "format": "%(asctime)s %(levelname)s %(name)s: %(message)s",
+                }
+            },
+            "handlers": {
+                "console": {
+                    "class": "logging.StreamHandler",
+                    "formatter": "default",
+                }
+            },
+            "loggers": {
+                "": {"handlers": ["console"], "level": lvl},
+                "uvicorn": {"handlers": ["console"], "level": lvl, "propagate": False},
+                "uvicorn.access": {"handlers": ["console"], "level": lvl, "propagate": False},
+            },
+        }
+    )
 
-# Singleton instance
-storage_manager = StorageManager()
+
+def get_logger(name: str) -> logging.Logger:
+    return logging.getLogger(name)
 ````
 
 ## File: backend/app/core/supabase_client.py
@@ -749,174 +650,6 @@ def get_supabase_client() -> Client:
     return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY)
 
 supabase: Client = get_supabase_client()
-````
-
-## File: backend/app/data/proverb_loader.py
-````python
-import json
-from pathlib import Path
-from typing import List, Optional, Dict
-from functools import lru_cache
-
-PROVERBS_FILE = Path(__file__).parent / "proverbs.json"
-
-class ProverbLoader:
-    def __init__(self):
-        self._proverbs: Dict[str, dict] = {}
-        self._load_proverbs()
-    
-    def _load_proverbs(self):
-        if not PROVERBS_FILE.exists():
-            print(f"Warning: {PROVERBS_FILE} not found")
-            return
-        
-        with open(PROVERBS_FILE, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            # Index by ID
-            self._proverbs = {p['id']: p for p in data}
-
-    def get_proverb(self, proverb_id: str) -> Optional[dict]:
-        return self._proverbs.get(proverb_id)
-
-    def get_proverbs_by_language(self, language: str) -> List[dict]:
-        return [p for p in self._proverbs.values() if p['language'] == language]
-
-    def get_all_proverbs(self) -> List[dict]:
-        return list(self._proverbs.values())
-
-@lru_cache()
-def get_proverb_loader() -> ProverbLoader:
-    return ProverbLoader()
-````
-
-## File: backend/app/data/proverbs.json
-````json
-[
-    {
-      "id": "yo_1",
-      "language": "yoruba",
-      "content": "Ile la ti n ko eso r'ode",
-      "literal_translation": "Charity begins at home",
-      "meaning": "Good behavior is learned from the family.",
-      "rarity": "common"
-    },
-    {
-      "id": "yo_2",
-      "language": "yoruba",
-      "content": "Odo to gbagbe orisun e, gbigbe lo ma gbe",
-      "literal_translation": "A river that forgets its source will dry up",
-      "meaning": "Never forget your roots.",
-      "rarity": "legendary"
-    },
-    {
-      "id": "yo_3",
-      "language": "yoruba",
-      "content": "A ki fi ete sile pa lapalapa",
-      "literal_translation": "One does not abandon leprosy to treat eczema",
-      "meaning": "Focus on solving major problems before minor ones.",
-      "rarity": "common"
-    },
-    {
-      "id": "yo_4",
-      "language": "yoruba",
-      "content": "Bi omode ba subu, a wo iwaju; bi agbalagba ba subu, a wo eyin",
-      "literal_translation": "When a child falls, he looks forward; when an elder falls, he looks back",
-      "meaning": "Adults reflect on past mistakes; children look ahead.",
-      "rarity": "uncommon"
-    },
-    {
-      "id": "yo_5",
-      "language": "yoruba",
-      "content": "Agba kii wa loja, ki ori omo tuntun wo",
-      "literal_translation": "An elder cannot be in the market while a baby's head goes crooked",
-      "meaning": "Elders must guide and protect the young.",
-      "rarity": "common"
-    },
-  
-    /* IGBO PROVERBS (5) */
-    {
-      "id": "ig_1",
-      "language": "igbo",
-      "content": "Nwata kwọọ aka, osoro okenye rie nri",
-      "literal_translation": "If a child washes his hands well, he eats with elders",
-      "meaning": "Hard work and discipline earn respect.",
-      "rarity": "common"
-    },
-    {
-      "id": "ig_2",
-      "language": "igbo",
-      "content": "A naghi agba oso a na-ata anụ ọhịa n’ụlọ",
-      "literal_translation": "No one hunts animals while sitting at home",
-      "meaning": "Success requires effort.",
-      "rarity": "common"
-    },
-    {
-      "id": "ig_3",
-      "language": "igbo",
-      "content": "Egbe bere, ugo bere",
-      "literal_translation": "Let the kite perch and let the eagle perch",
-      "meaning": "Live and let live; there is space for everyone.",
-      "rarity": "legendary"
-    },
-    {
-      "id": "ig_4",
-      "language": "igbo",
-      "content": "Oku nwere ebe o si banye n’ulo",
-      "literal_translation": "A fire has the place it entered from",
-      "meaning": "Problems have causes that must be traced.",
-      "rarity": "uncommon"
-    },
-    {
-      "id": "ig_5",
-      "language": "igbo",
-      "content": "Onye ajụjụ adịghị efu ụzọ",
-      "literal_translation": "He who asks questions never loses his way",
-      "meaning": "Asking questions brings knowledge and direction.",
-      "rarity": "common"
-    },
-  
-    /* HAUSA PROVERBS (5) */
-    {
-      "id": "ha_1",
-      "language": "hausa",
-      "content": "Komai nisan jifa, ƙasa zai faɗo",
-      "literal_translation": "No matter how far a throw goes, it will land",
-      "meaning": "All actions have consequences.",
-      "rarity": "common"
-    },
-    {
-      "id": "ha_2",
-      "language": "hausa",
-      "content": "Rana dubu ta barawo, rana ɗaya ta mai kaya",
-      "literal_translation": "A thousand days for the thief, one day for the owner",
-      "meaning": "Justice will eventually prevail.",
-      "rarity": "legendary"
-    },
-    {
-      "id": "ha_3",
-      "language": "hausa",
-      "content": "In ka ga gawa, ka ga darasi",
-      "literal_translation": "When you see a corpse, you see a lesson",
-      "meaning": "Learn from the misfortunes of others.",
-      "rarity": "uncommon"
-    },
-    {
-      "id": "ha_4",
-      "language": "hausa",
-      "content": "Ba a maganin wauta",
-      "literal_translation": "There is no cure for foolishness",
-      "meaning": "Some behaviors cannot be corrected.",
-      "rarity": "common"
-    },
-    {
-      "id": "ha_5",
-      "language": "hausa",
-      "content": "Kowa ya ci alala, ya sha ruwa",
-      "literal_translation": "Whoever eats okra must drink water",
-      "meaning": "Every action has a responsibility attached.",
-      "rarity": "common"
-    }
-  ]
 ````
 
 ## File: backend/app/data/scenario_loader.py
@@ -1043,58 +776,6 @@ class SavedWord(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 ````
 
-## File: backend/app/tts/__init__.py
-````python
-from app.core.config import settings
-
-async def synthesize_speech(text: str, language: str) -> bytes:
-    if settings.TTS_PROVIDER == "gemini":
-        from app.tts.gemini_provider import synthesize_speech as gemini_tts
-        return await gemini_tts(text, language)
-    else:
-        from app.tts.yarngpt_provider import synthesize_speech as yarngpt_tts
-        return await yarngpt_tts(text, language)
-````
-
-## File: backend/app/tts/gemini_provider.py
-````python
-from pydantic_ai import Agent
-
-VOICE_MAP = {
-    "yoruba": "Kainene",
-    "hausa": "Aoife",
-    "igbo": "Kainene",
-}
-
-async def synthesize_speech(text: str, language: str) -> bytes:
-    from pydantic import BaseModel, Field
-    
-    class AudioResponse(BaseModel):
-        audio_data: bytes = Field(description="The audio data")
-    
-    voice_name = VOICE_MAP.get(language, "Kainene")
-    
-    try:
-        agent = Agent('google-gla:gemini-2.5-flash-preview-tts')
-        
-        result = await agent.run(
-            f"Generate speech for this text in {language}",
-            message_history=[],
-            model_settings={
-                "voice_config": {
-                    "voice_name": voice_name
-                }
-            }
-        )
-        
-        if hasattr(result, 'audio_data'):
-            return result.audio_data
-        return b""
-    except Exception as e:
-        print(f"Gemini TTS error: {e}")
-        return b""
-````
-
 ## File: backend/app/tts/yarngpt.py
 ````python
 # This file is deprecated. Use the new modular structure:
@@ -1106,238 +787,6 @@ async def synthesize_speech(text: str, language: str) -> bytes:
 from app.tts import synthesize_speech
 
 __all__ = ['synthesize_speech']
-````
-
-## File: backend/scripts/cleanup_old_audio.py
-````python
-"""
-Script to clean up audio files older than 30 days from Supabase Storage.
-Deletes files from storage and sets audio URLs to NULL in the database.
-"""
-import os
-import sys
-from datetime import datetime, timedelta
-from pathlib import Path
-
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from app.core.config import settings
-from app.core.supabase_client import supabase
-from app.models.conversation import Conversation
-from app.models.turn import Turn
-
-
-def cleanup_old_audio():
-    """
-    Clean up audio files older than 30 days.
-    """
-    # Create database session
-    engine = create_engine(settings.DATABASE_URL.replace("postgresql://", "postgresql+psycopg://"))
-    SessionLocal = sessionmaker(bind=engine)
-    db = SessionLocal()
-    
-    try:
-        # Calculate cutoff date (30 days ago)
-        cutoff_date = datetime.now() - timedelta(days=30)
-        
-        print(f"Cleaning up audio files older than {cutoff_date.isoformat()}")
-        
-        # Find old conversations
-        old_conversations = db.query(Conversation).filter(
-            Conversation.created_at < cutoff_date
-        ).all()
-        
-        print(f"Found {len(old_conversations)} conversations older than 30 days")
-        
-        total_files_deleted = 0
-        total_turns_updated = 0
-        
-        for conv in old_conversations:
-            # Get all turns for this conversation
-            turns = db.query(Turn).filter(
-                Turn.conversation_id == conv.id
-            ).all()
-            
-            for turn in turns:
-                files_to_delete = []
-                
-                # Extract file paths from URLs
-                if turn.user_audio_url:
-                    # URL format: https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
-                    path = turn.user_audio_url.split(f"{settings.SUPABASE_BUCKET_NAME}/")[-1]
-                    files_to_delete.append(path)
-                
-                if turn.ai_response_audio_url:
-                    path = turn.ai_response_audio_url.split(f"{settings.SUPABASE_BUCKET_NAME}/")[-1]
-                    files_to_delete.append(path)
-                
-                # Delete files from Supabase Storage
-                for file_path in files_to_delete:
-                    try:
-                        supabase.storage.from_(settings.SUPABASE_BUCKET_NAME).remove([file_path])
-                        total_files_deleted += 1
-                        print(f"Deleted: {file_path}")
-                    except Exception as e:
-                        print(f"Error deleting {file_path}: {str(e)}")
-                
-                # Update database to NULL audio URLs
-                if turn.user_audio_url or turn.ai_response_audio_url:
-                    turn.user_audio_url = None
-                    turn.ai_response_audio_url = None
-                    total_turns_updated += 1
-        
-        # Commit database changes
-        db.commit()
-        
-        print(f"\nCleanup complete:")
-        print(f"- Files deleted: {total_files_deleted}")
-        print(f"- Turns updated: {total_turns_updated}")
-        print(f"- Conversations processed: {len(old_conversations)}")
-        
-    except Exception as e:
-        print(f"Error during cleanup: {str(e)}")
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
-if __name__ == "__main__":
-    cleanup_old_audio()
-````
-
-## File: backend/scripts/poc_chain.py
-````python
-import asyncio
-import time
-import os
-import sys
-from pathlib import Path
-import httpx
-
-# Add parent directory to path to import from app
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from pydantic_ai import BinaryContent
-from app.ai.agent import get_agent
-
-async def test_chain(audio_file_path: str, language: str = "igbo"):
-    print(f"Starting POC chain test with {audio_file_path}")
-    print(f"Language: {language}")
-    
-    start_total = time.time()
-    
-    with open(audio_file_path, "rb") as f:
-        audio_bytes = f.read()
-    
-    print(f"Audio file loaded: {len(audio_bytes)} bytes")
-    
-    # Get language-specific agent
-    agent = get_agent(language)
-    print(f"Using language-specific agent for {language}")
-    
-    start_gemini = time.time()
-    # Create BinaryContent for audio
-    audio_content = BinaryContent(data=audio_bytes, media_type="audio/webm")
-    
-    result = await agent.run([
-        f"The user is speaking {language}. Respond in {language}.",
-        audio_content
-    ])
-    gemini_time = time.time() - start_gemini
-    
-    data = result.output
-    print(f"\nGemini Response ({gemini_time:.2f}s):")
-    print(f"  Transcription: {data.user_transcription}")
-    print(f"  Grammar Correct: {data.grammar_is_correct}")
-    print(f"  Correction: {data.correction_feedback}")
-    print(f"  Reply (Local): {data.reply_text_local}")
-    print(f"  Reply (English): {data.reply_text_english}")
-    
-    start_tts = time.time()
-    yarngpt_key = os.getenv("YARNGPT_API_KEY", "YOUR_YARNGPT_API_KEY")
-    async with httpx.AsyncClient(timeout=20) as client:
-        tts_response = await client.post(
-            "https://yarngpt.ai/api/v1/tts",
-            headers={"Authorization": f"Bearer {yarngpt_key}"},
-            json={"text": data.reply_text_local, "voice_id": "idera", "language": language},
-        )
-        tts_response.raise_for_status()
-        audio_output = tts_response.content
-    tts_time = time.time() - start_tts
-    
-    output_file = Path("output_audio.wav")
-    output_file.write_bytes(audio_output)
-    print(f"\nYarnGPT TTS ({tts_time:.2f}s):")
-    print(f"  Audio saved to: {output_file}")
-    
-    total_time = time.time() - start_total
-    print(f"\nTotal latency: {total_time:.2f}s")
-    
-    if total_time > 4:
-        print("⚠️  Warning: Latency exceeds 4s target")
-    else:
-        print("✓ Latency within 4s target")
-
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 2:
-        print("Usage: python poc_chain.py <audio_file_path> [language]")
-        sys.exit(1)
-    
-    audio_path = sys.argv[1]
-    lang = sys.argv[2] if len(sys.argv) > 2 else "yoruba"
-    
-    asyncio.run(test_chain(audio_path, lang))
-````
-
-## File: backend/scripts/seed_db.py
-````python
-import json
-import sys
-from pathlib import Path
-
-# Add parent directory to path to import app modules
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from app.db.base import SessionLocal
-from app.models.gamification import Proverb
-from sqlalchemy.exc import IntegrityError
-
-DATA_DIR = Path(__file__).parent.parent / "app" / "data"
-
-def seed_proverbs():
-    db = SessionLocal()
-    print("🌱 Seeding Proverbs...")
-    
-    try:
-        with open(DATA_DIR / "proverbs.json", "r") as f:
-            proverbs_data = json.load(f)
-            
-        count = 0
-        for item in proverbs_data:
-            # Check if exists
-            exists = db.query(Proverb).filter_by(id=item['id']).first()
-            if not exists:
-                p = Proverb(**item)
-                db.add(p)
-                count += 1
-        
-        db.commit()
-        print(f"✅ Added {count} new proverbs.")
-        
-    except FileNotFoundError:
-        print("❌ proverbs.json not found!")
-    except Exception as e:
-        print(f"❌ Error: {e}")
-    finally:
-        db.close()
-
-if __name__ == "__main__":
-    seed_proverbs()
 ````
 
 ## File: backend/.env.example
@@ -1449,44 +898,6 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080", "--reload
 set -e
 alembic upgrade head
 exec uvicorn app.main:app --host 0.0.0.0 --port 8080
-````
-
-## File: frontend/src/components/CulturalAlert.tsx
-````typescript
-import { useEffect, useState } from 'react'
-
-export default function CulturalAlert({ feedback }: { feedback: string | null }) {
-  const [visible, setVisible] = useState(false)
-
-  useEffect(() => {
-    if (feedback) {
-      setVisible(true)
-      const audio = new Audio('/sounds/vine_boom.mp3') // Optional: Add a dramatic sound effect
-      audio.play().catch(() => {})
-      setTimeout(() => setVisible(false), 5000)
-    }
-  }, [feedback])
-
-  if (!visible || !feedback) return null
-
-  return (
-    <div className="fixed inset-0 flex items-center justify-center z-50 pointer-events-none">
-      <div className="bg-red-600 text-white px-6 py-4 rounded-xl shadow-2xl animate-bounce-in max-w-sm text-center border-4 border-yellow-400">
-        <div className="text-4xl mb-2">🚩 CULTURE FLAG!</div>
-        <div className="text-xl font-bold mb-2">"No Respect!"</div>
-        <p className="text-red-100">{feedback}</p>
-      </div>
-      <style>{`
-        @keyframes bounce-in {
-          0% { transform: scale(0); }
-          50% { transform: scale(1.2); }
-          100% { transform: scale(1); }
-        }
-        .animate-bounce-in { animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-      `}</style>
-    </div>
-  )
-}
 ````
 
 ## File: frontend/src/components/HaggleTicker.tsx
@@ -1625,124 +1036,6 @@ export default function RequireAuth({ children }: { children: JSX.Element }) {
 }
 ````
 
-## File: frontend/src/components/ScenarioModal.tsx
-````typescript
-import { Scenario } from '../lib/api'
-
-interface ScenarioModalProps {
-  scenario: Scenario
-  onClose: () => void
-  onStart: () => void
-}
-
-export default function ScenarioModal({ scenario, onClose, onStart }: ScenarioModalProps) {
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-t-2xl">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <span className="px-3 py-1 bg-white bg-opacity-20 rounded-full text-xs font-medium">
-                  {scenario.difficulty}
-                </span>
-                {scenario.category && (
-                  <span className="px-3 py-1 bg-white bg-opacity-20 rounded-full text-xs font-medium">
-                    {scenario.category}
-                  </span>
-                )}
-              </div>
-              <h2 className="text-2xl font-bold">{scenario.title}</h2>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 space-y-6">
-          {/* Scenario Description */}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">📖 Scenario</h3>
-            <p className="text-gray-700">{scenario.description}</p>
-          </div>
-
-          {/* Roles */}
-          {scenario.roles && (
-            <div className="bg-blue-50 rounded-xl p-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">🎭 Your Roles</h3>
-              <div className="space-y-2">
-                <div>
-                  <span className="font-medium text-blue-700">You:</span>
-                  <span className="text-gray-700 ml-2">{scenario.roles.user}</span>
-                </div>
-                <div>
-                  <span className="font-medium text-purple-700">AI Character:</span>
-                  <span className="text-gray-700 ml-2">{scenario.roles.ai}</span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Mission */}
-          {scenario.mission && (
-            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">🎯 Your Mission</h3>
-              <div className="space-y-2">
-                <div>
-                  <span className="font-medium text-amber-700">Objective:</span>
-                  <p className="text-gray-700 mt-1">{scenario.mission.objective}</p>
-                </div>
-                <div>
-                  <span className="font-medium text-amber-700">Success Condition:</span>
-                  <p className="text-gray-700 mt-1">{scenario.mission.success_condition}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Key Vocabulary */}
-          {scenario.key_vocabulary && scenario.key_vocabulary.length > 0 && (
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">📚 Cheat Sheet</h3>
-              <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-                {scenario.key_vocabulary.map((vocab, index) => (
-                  <div key={index} className="flex justify-between items-start py-2 border-b border-gray-200 last:border-0">
-                    <span className="font-medium text-gray-900">{vocab.word}</span>
-                    <span className="text-gray-600 text-sm text-right ml-4">{vocab.meaning}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="p-6 bg-gray-50 rounded-b-2xl flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-100 transition"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onStart}
-            className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-purple-700 transition shadow-lg"
-          >
-            🚀 Start Mission
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-````
-
 ## File: frontend/src/contexts/AuthContext.tsx
 ````typescript
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
@@ -1828,319 +1121,6 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 ````
 
-## File: frontend/src/pages/MapDashboard.tsx
-````typescript
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { getScenarios, getUserProgress } from '../lib/api'
-
-// Simple SVG Icons
-const Icons = {
-  Lock: () => <span className="text-2xl">🔒</span>,
-  Star: ({ filled }: { filled: boolean }) => <span className={`text-sm ${filled ? 'text-yellow-400' : 'text-gray-300'}`}>★</span>,
-  Airport: () => <span className="text-3xl">✈️</span>,
-  Bus: () => <span className="text-3xl">🚌</span>,
-  Market: () => <span className="text-3xl">🧺</span>,
-  Village: () => <span className="text-3xl">🛖</span>,
-}
-
-export default function MapDashboard() {
-  const [scenarios, setScenarios] = useState<any[]>([])
-  const [progress, setProgress] = useState<any>({})
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    Promise.all([getScenarios(), getUserProgress()]).then(([sData, pData]) => {
-      // Sort scenarios by level
-      const sorted = sData.sort((a: any, b: any) => a.level - b.level)
-      setScenarios(sorted)
-      
-      // Map progress array to object
-      const pMap = pData.reduce((acc: any, curr: any) => ({
-        ...acc, [curr.scenario_id]: curr.stars
-      }), {})
-      setProgress(pMap)
-    })
-  }, [])
-
-  const isUnlocked = (index: number) => {
-    if (index === 0) return true
-    const prevId = scenarios[index - 1].id
-    return (progress[prevId] || 0) >= 1 // Need at least 1 star to unlock next
-  }
-
-  return (
-    <div className="min-h-screen bg-[#FDF6E3] pb-20">
-      <div className="bg-green-800 text-white p-4 shadow-md sticky top-0 z-10 flex justify-between items-center">
-        <h1 className="font-bold text-lg">🇳🇬 Naija Tour</h1>
-        <button onClick={() => navigate('/deck')} className="text-sm bg-green-700 px-3 py-1 rounded-full">
-          🃏 Wisdom Deck
-        </button>
-      </div>
-
-      <div className="max-w-md mx-auto p-8 relative">
-        {/* Road Line */}
-        <div className="absolute left-1/2 top-0 bottom-0 w-2 bg-gray-200 -ml-1 z-0"></div>
-
-        {scenarios.map((scenario, index) => {
-          const locked = !isUnlocked(index)
-          const stars = progress[scenario.id] || 0
-          
-          return (
-            <div key={scenario.id} className="relative z-10 mb-16 flex flex-col items-center">
-              {/* Level Node */}
-              <button
-                disabled={locked}
-                onClick={() => navigate(`/chat/${scenario.id}`, { state: { scenarioId: scenario.id } })}
-                className={`
-                  w-20 h-20 rounded-full border-4 flex items-center justify-center shadow-xl transition-transform hover:scale-105
-                  ${locked 
-                    ? 'bg-gray-300 border-gray-400 grayscale cursor-not-allowed' 
-                    : 'bg-white border-green-600 cursor-pointer'}
-                `}
-              >
-                {locked ? <Icons.Lock /> : (
-                  scenario.level === 1 ? <Icons.Airport /> :
-                  scenario.level === 2 ? <Icons.Bus /> :
-                  scenario.level === 3 ? <Icons.Market /> : <Icons.Village />
-                )}
-              </button>
-
-              {/* Info Label */}
-              <div className="mt-3 bg-white px-4 py-2 rounded-xl shadow-sm text-center border border-gray-100">
-                <div className="font-bold text-gray-800">{scenario.title}</div>
-                {!locked && (
-                  <div className="flex justify-center mt-1 space-x-1">
-                    {[1, 2, 3].map(i => <Icons.Star key={i} filled={i <= stars} />)}
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-````
-
-## File: frontend/src/pages/OnboardingPage.tsx
-````typescript
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { updateUserProfile, Language, Proficiency } from '../lib/api'
-
-export default function OnboardingPage() {
-  const [step, setStep] = useState(1)
-  const [language, setLanguage] = useState<Language | null>(null)
-  const [proficiency, setProficiency] = useState<Proficiency | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  
-  const navigate = useNavigate()
-
-  const languages: { value: Language; label: string; flag: string }[] = [
-    { value: 'yoruba', label: 'Yoruba', flag: '🇳🇬' },
-    { value: 'hausa', label: 'Hausa', flag: '🇳🇬' },
-    { value: 'igbo', label: 'Igbo', flag: '🇳🇬' },
-  ]
-
-  const levels: { value: Proficiency; label: string; description: string }[] = [
-    { value: 'beginner', label: 'Beginner', description: 'Just starting out' },
-    { value: 'intermediate', label: 'Intermediate', description: 'Can hold basic conversations' },
-    { value: 'advanced', label: 'Advanced', description: 'Fluent speaker' },
-  ]
-
-  const handleSubmit = async () => {
-    if (!language || !proficiency) return
-    
-    setLoading(true)
-    setError(null)
-
-    try {
-      await updateUserProfile(language, proficiency)
-      navigate('/dashboard')
-    } catch (err: any) {
-      setError(err.message || 'Failed to save profile')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome to TalkNative!
-          </h1>
-          <p className="text-gray-600">
-            Let's personalize your learning experience
-          </p>
-        </div>
-
-        {/* Progress indicator */}
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center space-x-2">
-            <div className={`w-3 h-3 rounded-full ${step >= 1 ? 'bg-blue-600' : 'bg-gray-300'}`} />
-            <div className={`w-12 h-1 ${step >= 2 ? 'bg-blue-600' : 'bg-gray-300'}`} />
-            <div className={`w-3 h-3 rounded-full ${step >= 2 ? 'bg-blue-600' : 'bg-gray-300'}`} />
-          </div>
-        </div>
-
-        {step === 1 && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-center mb-6">
-              What language do you want to learn?
-            </h2>
-            <div className="grid grid-cols-1 gap-4">
-              {languages.map((lang) => (
-                <button
-                  key={lang.value}
-                  onClick={() => setLanguage(lang.value)}
-                  className={`p-6 rounded-xl border-2 transition-all ${
-                    language === lang.value
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center space-x-4">
-                    <span className="text-4xl">{lang.flag}</span>
-                    <span className="text-xl font-semibold">{lang.label}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-            <button
-              onClick={() => setStep(2)}
-              disabled={!language}
-              className="w-full mt-6 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
-            >
-              Next
-            </button>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-semibold text-center mb-6">
-              What's your current level?
-            </h2>
-            <div className="grid grid-cols-1 gap-4">
-              {levels.map((level) => (
-                <button
-                  key={level.value}
-                  onClick={() => setProficiency(level.value)}
-                  className={`p-6 rounded-xl border-2 transition-all text-left ${
-                    proficiency === level.value
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="font-semibold text-lg">{level.label}</div>
-                  <div className="text-gray-600 text-sm">{level.description}</div>
-                </button>
-              ))}
-            </div>
-
-            {error && (
-              <div className="p-4 rounded-lg bg-red-50 text-red-800 text-sm">
-                {error}
-              </div>
-            )}
-
-            <div className="flex space-x-4">
-              <button
-                onClick={() => setStep(1)}
-                className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={!proficiency || loading}
-                className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
-              >
-                {loading ? 'Saving...' : 'Get Started'}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-````
-
-## File: frontend/src/pages/WisdomDeckPage.tsx
-````typescript
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { getWisdomDeck } from '../lib/api'
-
-export default function WisdomDeckPage() {
-  const [cards, setCards] = useState<any[]>([])
-  const navigate = useNavigate()
-
-  useEffect(() => {
-    getWisdomDeck().then(setCards)
-  }, [])
-
-  return (
-    <div className="min-h-screen bg-gray-900 p-8 text-white">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-serif text-yellow-500">Ancient Wisdom</h1>
-        <button onClick={() => navigate('/dashboard')} className="text-gray-400">Back</button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-        {cards.map((card) => (
-          <div key={card.id} className="bg-gray-800 border border-gray-700 p-6 rounded-xl">
-            <div className="text-xs uppercase tracking-widest text-gray-500 mb-2">{card.rarity}</div>
-            <h3 className="text-xl font-bold mb-2 text-yellow-100">{card.content}</h3>
-            <p className="text-sm italic text-gray-400 mb-4">"{card.literal_translation}"</p>
-            <div className="bg-black/30 p-3 rounded">
-              <p className="text-sm text-gray-300">{card.meaning}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-````
-
-## File: frontend/src/index.css
-````css
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-````
-
-## File: frontend/Dockerfile
-````
-FROM node:20-alpine AS build
-WORKDIR /app
-COPY package*.json ./
-RUN npm i
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 8080
-CMD ["nginx", "-g", "daemon off;"]
-````
-
 ## File: frontend/Dockerfile.dev
 ````
 FROM node:20-alpine
@@ -2152,6 +1132,33 @@ EXPOSE 5173
 CMD ["npm", "run", "dev", "--", "--host"]
 ````
 
+## File: frontend/nginx.conf
+````
+server {
+    listen 8080;
+    server_name localhost;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Enable gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss application/javascript application/json;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}
+````
+
 ## File: frontend/postcss.config.js
 ````javascript
 export default {
@@ -2159,21 +1166,6 @@ export default {
     tailwindcss: {},
     autoprefixer: {},
   },
-}
-````
-
-## File: frontend/tailwind.config.js
-````javascript
-/** @type {import('tailwindcss').Config} */
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
 }
 ````
 
@@ -2959,299 +1951,6 @@ async def chat_endpoint(
     }
 ````
 
-## File: backend/app/api/v1/conversations.py
-````python
-import uuid
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from sqlalchemy.orm import Session
-from sqlalchemy import desc
-from typing import Optional, List
-from pydantic_ai import BinaryContent
-
-from app.core.auth import get_current_user, CurrentUser
-from app.core.storage import storage_manager
-from app.db.session import get_db
-from app.data.scenario_loader import get_scenario_loader
-from app.models.conversation import Conversation
-from app.models.turn import Turn
-from app.models.schemas import ConversationStartRequest, ConversationStartResponse, TurnResponse, ConversationHistoryResponse
-from app.ai.agent import get_agent
-from app.ai.prompt_builder import build_system_prompt
-from app.tts import synthesize_speech
-
-router = APIRouter(tags=["conversations"])
-
-@router.post("/start", response_model=ConversationStartResponse)
-async def start_conversation(
-    request: ConversationStartRequest,
-    current_user: CurrentUser = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Start a new conversation with a specific scenario.
-    """
-    # Verify user has completed onboarding
-    if not current_user.target_language or not current_user.proficiency_level:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Please complete onboarding first"
-        )
-    
-    # Verify scenario exists and matches user's language
-    loader = get_scenario_loader()
-    scenario = loader.get_scenario(request.scenario_id)
-    
-    if not scenario:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Scenario not found"
-        )
-    
-    if scenario['language'] != current_user.target_language:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Scenario language doesn't match your target language"
-        )
-    
-    # Create new conversation
-    conversation_id = str(uuid.uuid4())
-    conversation = Conversation(
-        id=conversation_id,
-        user_id=current_user.id,
-        scenario_id=request.scenario_id,
-        active=True
-    )
-    
-    db.add(conversation)
-    db.commit()
-    
-    # TODO: Optionally generate initial AI greeting
-    # For now, return without greeting
-    
-    return ConversationStartResponse(
-        conversation_id=conversation_id,
-        initial_ai_greeting=None,
-        initial_ai_audio_url=None
-    )
-
-@router.post("/{conversation_id}/turn", response_model=TurnResponse)
-async def create_turn(
-    conversation_id: str,
-    file: UploadFile = File(...),
-    current_user: CurrentUser = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Process a new turn in an existing conversation.
-    Accepts user audio, processes with AI, generates TTS, and stores everything.
-    """
-    # Verify conversation exists and belongs to user
-    conversation = db.query(Conversation).filter(
-        Conversation.id == conversation_id,
-        Conversation.user_id == current_user.id
-    ).first()
-    
-    if not conversation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conversation not found"
-        )
-    
-    if not conversation.active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Conversation is not active"
-        )
-    
-    # Get scenario details
-    loader = get_scenario_loader()
-    scenario = loader.get_scenario(conversation.scenario_id)
-    
-    if not scenario:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Scenario configuration not found"
-        )
-    
-    # Read audio file
-    audio_bytes = await file.read()
-    mime_type = file.content_type or "audio/webm"
-    
-    # Get conversation history (last 6 turns)
-    previous_turns = db.query(Turn).filter(
-        Turn.conversation_id == conversation_id
-    ).order_by(desc(Turn.turn_number)).limit(6).all()
-    
-    previous_turns.reverse()  # Chronological order
-    
-    # Build message history for Pydantic AI
-    message_history = []
-    for turn in previous_turns:
-        message_history.append(f"User: {turn.user_transcription}")
-        message_history.append(f"Assistant: {turn.ai_response_text}")
-    
-    # Build dynamic system prompt with full scenario data
-    system_prompt = build_system_prompt(
-        language=current_user.target_language,
-        scenario_prompt=scenario.get('system_prompt_context', scenario.get('system_prompt', '')),
-        proficiency_level=current_user.proficiency_level,
-        scenario_data=scenario  # Pass full scenario for mission-based prompts
-    )
-    
-    # Get language-specific agent with dynamic prompt
-    agent = get_agent(current_user.target_language)
-    
-    # Create BinaryContent for audio
-    audio_content = BinaryContent(data=audio_bytes, media_type=mime_type)
-    
-    # Run AI agent with history and scenario context
-    messages = [system_prompt] + message_history + [
-        f"The user is speaking {current_user.target_language}. Respond in {current_user.target_language}.",
-        audio_content
-    ]
-    
-    result = await agent.run(messages)
-    data = result.output
-    
-    # Generate TTS for AI response
-    ai_audio_bytes = await synthesize_speech(
-        text=data.reply_text_local,
-        language=current_user.target_language
-    )
-    
-    # Calculate turn number
-    turn_number = len(previous_turns) + 1
-    
-    # Upload audios to Supabase Storage
-    user_audio_url = await storage_manager.upload_audio(
-        audio_data=audio_bytes,
-        user_id=current_user.id,
-        conversation_id=conversation_id,
-        turn_number=turn_number,
-        file_type="user"
-    )
-    
-    ai_audio_url = await storage_manager.upload_audio(
-        audio_data=ai_audio_bytes,
-        user_id=current_user.id,
-        conversation_id=conversation_id,
-        turn_number=turn_number,
-        file_type="ai"
-    )
-    
-    # Calculate grammar score (simple: 10 if correct, 5 if has correction)
-    grammar_score = 10 if data.grammar_is_correct else 5
-    
-    # Save turn to database
-    turn = Turn(
-        conversation_id=conversation_id,
-        turn_number=turn_number,
-        user_audio_url=user_audio_url,
-        user_transcription=data.user_transcription,
-        ai_response_text=data.reply_text_local,
-        ai_response_text_english=data.reply_text_english,
-        ai_response_audio_url=ai_audio_url,
-        grammar_correction=data.correction_feedback,
-        grammar_score=grammar_score
-    )
-    
-    db.add(turn)
-    db.commit()
-    db.refresh(turn)
-    
-    return TurnResponse(
-        turn_number=turn_number,
-        transcription=data.user_transcription,
-        ai_text=data.reply_text_local,
-        ai_text_english=data.reply_text_english,
-        ai_audio_url=ai_audio_url or "",
-        correction=data.correction_feedback,
-        grammar_score=grammar_score
-    )
-
-@router.get("/history", response_model=List[ConversationHistoryResponse])
-async def get_conversation_history(
-    current_user: CurrentUser = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Get user's conversation history with metadata.
-    Shows recent conversations for the dashboard.
-    """
-    # Get user's conversations ordered by most recent
-    conversations = db.query(Conversation).filter(
-        Conversation.user_id == current_user.id
-    ).order_by(desc(Conversation.created_at)).limit(10).all()
-    
-    loader = get_scenario_loader()
-    result = []
-    
-    for conv in conversations:
-        # Get turn count
-        turn_count = db.query(Turn).filter(
-            Turn.conversation_id == conv.id
-        ).count()
-        
-        # Get latest turn for preview
-        latest_turn = db.query(Turn).filter(
-            Turn.conversation_id == conv.id
-        ).order_by(desc(Turn.turn_number)).first()
-        
-        # Get scenario details
-        scenario = loader.get_scenario(conv.scenario_id)
-        
-        result.append(ConversationHistoryResponse(
-            conversation_id=conv.id,
-            scenario_title=scenario['title'] if scenario else "Unknown Scenario",
-            scenario_id=conv.scenario_id,
-            created_at=conv.created_at,
-            turn_count=turn_count,
-            last_message=latest_turn.ai_response_text[:100] if latest_turn else None,
-            active=conv.active
-        ))
-    
-    return result
-
-@router.get("/{conversation_id}/turns", response_model=List[TurnResponse])
-async def get_conversation_turns(
-    conversation_id: str,
-    current_user: CurrentUser = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Fetch all turns for a specific conversation.
-    Used to restore conversation history when user returns to a chat.
-    """
-    # Verify conversation exists and belongs to user
-    conv = db.query(Conversation).filter(
-        Conversation.id == conversation_id,
-        Conversation.user_id == current_user.id
-    ).first()
-    
-    if not conv:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Conversation not found"
-        )
-    
-    # Fetch all turns in chronological order
-    turns = db.query(Turn).filter(
-        Turn.conversation_id == conversation_id
-    ).order_by(Turn.turn_number.asc()).all()
-    
-    return [
-        TurnResponse(
-            turn_number=t.turn_number,
-            transcription=t.user_transcription,
-            ai_text=t.ai_response_text,
-            ai_text_english=t.ai_response_text_english,
-            ai_audio_url=t.ai_response_audio_url or "",
-            correction=t.grammar_correction,
-            grammar_score=t.grammar_score
-        ) for t in turns
-    ]
-````
-
 ## File: backend/app/api/v1/users.py
 ````python
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -3387,383 +2086,132 @@ async def get_current_user(
         )
 ````
 
-## File: backend/app/core/config.py
-````python
-from pydantic_settings import BaseSettings
-from typing import Literal
-
-class Settings(BaseSettings):
-    GOOGLE_API_KEY: str
-    YARNGPT_API_KEY: str
-    DATABASE_URL: str
-    CORS_ALLOW_ORIGINS: list[str] = ["*"]
-    
-    TTS_PROVIDER: Literal["yarngpt", "gemini"] = "yarngpt"
-    
-    # Supabase configuration
-    SUPABASE_URL: str
-    SUPABASE_SERVICE_KEY: str
-    SUPABASE_JWT_SECRET: str
-    SUPABASE_BUCKET_NAME: str = "chat-audio"
-
-    model_config = {
-        "env_file": ".env",
-        "extra": "ignore",
-    }
-
-settings = Settings()
-````
-
-## File: backend/app/data/scenarios.json
+## File: backend/app/data/proverbs.json
 ````json
 [
-  {
-    "id": "yoruba_greetings_elder",
-    "language": "yoruba",
-    "category": "Greetings",
-    "title": "Visiting an Elder",
-    "difficulty": "beginner",
-    "description": "You are visiting your friend's grandfather (Baba). In Yoruba culture, greeting elders requires specific respect markers.",
-    "roles": {
-      "user": "A younger visitor entering the family house",
-      "ai": "Baba, a respected elder sitting in his armchair. He values tradition."
+    {
+      "id": "yo_1",
+      "language": "yoruba",
+      "content": "Ile la ti n ko eso r'ode",
+      "literal_translation": "Charity begins at home",
+      "meaning": "Good behavior is learned from the family.",
+      "rarity": "common"
     },
-    "mission": {
-      "objective": "Greet Baba respectfully and ask about his health.",
-      "success_condition": "User must use 'E kaasan/E kaale', address him as 'Baba', and ask 'Kodu ara?' (How is your health?)."
+    {
+      "id": "yo_2",
+      "language": "yoruba",
+      "content": "Odo to gbagbe orisun e, gbigbe lo ma gbe",
+      "literal_translation": "A river that forgets its source will dry up",
+      "meaning": "Never forget your roots.",
+      "rarity": "legendary"
     },
-    "key_vocabulary": [
-      { "word": "E kaasan", "meaning": "Good Afternoon (Respectful)" },
-      { "word": "Baba", "meaning": "Father/Elder" },
-      { "word": "Bawoni", "meaning": "How are things? (Too casual for this context - avoid!)" },
-      { "word": "Se dada ni?", "meaning": "Is everything good?" }
-    ],
-    "system_prompt_context": "You are 'Baba', an elderly Yoruba man. You are kind but strict about respect. Expect the user to use the plural/respectful 'E' (e.g., E kaasan, not Kaasan). If they greet you casually (Bawo), gently scold them by saying 'Ah, omode yi?' (Ah, this child?)."
-  },
-  {
-    "id": "yoruba_market_negotiation",
-    "language": "yoruba",
-    "category": "Market",
-    "title": "The Tough Negotiator",
-    "difficulty": "intermediate",
-    "description": "You are at Bodija Market to buy Pepper (Ata Rodo). The seller is known for starting with high prices.",
-    "roles": {
-      "user": "A savvy shopper who knows the real value",
-      "ai": "Iya Tolu, a sharp market woman who calls everyone 'Oko mi' (My husband) or 'Iyawo mi' (My wife) but charges double."
+    {
+      "id": "yo_3",
+      "language": "yoruba",
+      "content": "A ki fi ete sile pa lapalapa",
+      "literal_translation": "One does not abandon leprosy to treat eczema",
+      "meaning": "Focus on solving major problems before minor ones.",
+      "rarity": "common"
     },
-    "mission": {
-      "objective": "Negotiate the price of a basket of pepper down from ₦5,000 to ₦3,000.",
-      "success_condition": "User must reject the first price, claim it is too expensive ('O won'), and ask for 'Jara' (extra)."
+    {
+      "id": "yo_4",
+      "language": "yoruba",
+      "content": "Bi omode ba subu, a wo iwaju; bi agbalagba ba subu, a wo eyin",
+      "literal_translation": "When a child falls, he looks forward; when an elder falls, he looks back",
+      "meaning": "Adults reflect on past mistakes; children look ahead.",
+      "rarity": "uncommon"
     },
-    "haggle_settings": {
-      "start_prie": 500,
-      "target_price": 3000,
-      "reserve_price": 2800
+    {
+      "id": "yo_5",
+      "language": "yoruba",
+      "content": "Agba kii wa loja, ki ori omo tuntun wo",
+      "literal_translation": "An elder cannot be in the market while a baby's head goes crooked",
+      "meaning": "Elders must guide and protect the young.",
+      "rarity": "common"
     },
-    "key_vocabulary": [
-      { "word": "Elo ni?", "meaning": "How much is it?" },
-      { "word": "O won ju", "meaning": "It is too expensive" },
-      { "word": "Jara", "meaning": "Bonus/Extra" },
-      { "word": "Fi sile", "meaning": "Leave it / Reduce it" }
-    ],
-    "system_prompt_context": "You are Iya Tolu. Start by offering the pepper for ₦5,000. Be dramatic. If the user offers a low price, exclaim 'Ha! O fe gba oja mi!' (You want to snatch my goods!). Only agree to ₦3,000 after they ask for 'Jara' or beg nicely."
-  },
-  {
-    "id": "yoruba_transport_danfo",
-    "language": "yoruba",
-    "category": "Transport",
-    "title": "The Danfo Conductor",
-    "difficulty": "intermediate",
-    "description": "You are in a yellow Danfo bus in Lagos heading to Oshodi. The conductor is collecting money.",
-    "roles": {
-      "user": "A passenger sitting at the back",
-      "ai": "The Conductor, loud, aggressive, and in a hurry."
-    },
-    "mission": {
-      "objective": "Pay your fare and ensure you get your change back.",
-      "success_condition": "User must state their destination (Oshodi), pay, and demand their 'Change' firmly."
-    },
-    "key_vocabulary": [
-      { "word": "Oshodi", "meaning": "A major stop in Lagos" },
-      { "word": "O wa", "meaning": "There is (Stop here)" },
-      { "word": "Change mi da?", "meaning": "Where is my change?" },
-      { "word": "Ebole", "meaning": "Come down (Get off)" }
-    ],
-    "system_prompt_context": "You are a busy Lagos conductor. You speak fast. Shout 'Oshodi! Oshodi! Enter with your change o!'. Try to forget giving the user their change until they remind you."
-  },
-  {
-    "id": "yoruba_food_buka",
-    "language": "yoruba",
-    "category": "Food",
-    "title": "Ordering at the Buka",
-    "difficulty": "beginner",
-    "description": "You are at a local canteen (Buka). You want to eat Amala and Ewedu soup.",
-    "roles": {
-      "user": "A hungry customer",
-      "ai": "The Server, efficient and listing options quickly."
-    },
-    "mission": {
-      "objective": "Order Amala, Ewedu, and one piece of meat (Eran).",
-      "success_condition": "User must specify the soup and the protein clearly."
-    },
-    "key_vocabulary": [
-      { "word": "Amala", "meaning": "Yam flour meal" },
-      { "word": "Ewedu", "meaning": "Jute leaf soup" },
-      { "word": "Eran", "meaning": "Meat" },
-      { "word": "Ponmo", "meaning": "Cow skin" }
-    ],
-    "system_prompt_context": "You are serving food. Ask 'Kilo fe je?' (What do you want to eat?). List options like Amala, Iyan, Fufu. Ask if they want 'Eran' (Meat) or 'Eja' (Fish)."
-  },
-  {
-    "id": "yoruba_directions",
-    "language": "yoruba",
-    "category": "Directions",
-    "title": "Lost in Ibadan",
-    "difficulty": "advanced",
-    "description": "You are lost. You are looking for the Cocoa House.",
-    "roles": {
-      "user": "A lost traveler",
-      "ai": "A street hawker selling water."
-    },
-    "mission": {
-      "objective": "Ask for directions to Cocoa House.",
-      "success_condition": "User must understand the directions given and thank the hawker."
-    },
-    "key_vocabulary": [
-      { "word": "E jowo", "meaning": "Please" },
-      { "word": "Ona wo?", "meaning": "Which way?" },
-      { "word": "Cocoa House", "meaning": "A famous landmark" }
-    ],
-    "system_prompt_context": "You are a hawker. When asked for Cocoa House, explain: 'Go straight, turn right at the roundabout.' Use simple Yoruba phrases like 'Lo taara' (Go straight)."
-  },
   
-  {
-    "id": "hausa_greetings_formal",
-    "language": "hausa",
-    "category": "Greetings",
-    "title": "Greeting Alhaji",
-    "difficulty": "beginner",
-    "description": "You are meeting a respected community leader, Alhaji Musa. Hausa greetings are structured and repetitive.",
-    "roles": {
-      "user": "A visitor",
-      "ai": "Alhaji Musa, calm and welcoming."
+    {
+      "id": "ig_1",
+      "language": "igbo",
+      "content": "Nwata kwọọ aka, osoro okenye rie nri",
+      "literal_translation": "If a child washes his hands well, he eats with elders",
+      "meaning": "Hard work and discipline earn respect.",
+      "rarity": "common"
     },
-    "mission": {
-      "objective": "Exchange proper pleasantries.",
-      "success_condition": "User must say 'Ina kwana' or 'Ina wuni' and ask about his household ('Gida')."
+    {
+      "id": "ig_2",
+      "language": "igbo",
+      "content": "A naghi agba oso a na-ata anụ ọhịa n’ụlọ",
+      "literal_translation": "No one hunts animals while sitting at home",
+      "meaning": "Success requires effort.",
+      "rarity": "common"
     },
-    "key_vocabulary": [
-      { "word": "Ina kwana?", "meaning": "Good morning (How was your sleep?)" },
-      { "word": "Lafiya lau", "meaning": "Fine / In health" },
-      { "word": "Yaya gida?", "meaning": "How is the family/house?" },
-      { "word": "Madalla", "meaning": "Thank God/Great" }
-    ],
-    "system_prompt_context": "You are Alhaji. Reply to greetings with 'Lafiya lau'. Ask the user about their work ('Aiki') and their tiredness ('Gajiya'). Keep the exchange warm and polite."
-  },
-  {
-    "id": "hausa_market_suya",
-    "language": "hausa",
-    "category": "Food",
-    "title": " The Suya Spot",
-    "difficulty": "beginner",
-    "description": "It is evening. You are buying Suya (spicy grilled meat) from Mai Suya.",
-    "roles": {
-      "user": "A customer",
-      "ai": "Mai Suya, cutting meat with a knife."
+    {
+      "id": "ig_3",
+      "language": "igbo",
+      "content": "Egbe bere, ugo bere",
+      "literal_translation": "Let the kite perch and let the eagle perch",
+      "meaning": "Live and let live; there is space for everyone.",
+      "rarity": "legendary"
     },
-    "mission": {
-      "objective": "Buy ₦1,000 worth of meat with Yaji (Pepper) and Onions.",
-      "success_condition": "User must mention the amount and specifically ask for 'Yaji' and 'Albasa'."
+    {
+      "id": "ig_4",
+      "language": "igbo",
+      "content": "Oku nwere ebe o si banye n’ulo",
+      "literal_translation": "A fire has the place it entered from",
+      "meaning": "Problems have causes that must be traced.",
+      "rarity": "uncommon"
     },
-    "key_vocabulary": [
-      { "word": "Nawa?", "meaning": "How much?" },
-      { "word": "Na dubu daya", "meaning": "For one thousand" },
-      { "word": "Yaji", "meaning": "Spicy pepper powder" },
-      { "word": "Albasa", "meaning": "Onion" }
-    ],
-    "system_prompt_context": "You are Mai Suya. Call the user 'Mai Gida' (Boss) or 'Oga'. Ask if they want it spicy. 'A sa yaji?' (Should I put pepper?)."
-  },
-  {
-    "id": "hausa_transport_keke",
-    "language": "hausa",
-    "category": "Transport",
-    "title": "Taking a Keke Napep",
-    "difficulty": "intermediate",
-    "description": "You need a ride to the Central Mosque using a yellow tricycle (Keke).",
-    "roles": {
-      "user": "A passenger",
-      "ai": "The Keke Driver."
+    {
+      "id": "ig_5",
+      "language": "igbo",
+      "content": "Onye ajụjụ adịghị efu ụzọ",
+      "literal_translation": "He who asks questions never loses his way",
+      "meaning": "Asking questions brings knowledge and direction.",
+      "rarity": "common"
     },
-    "mission": {
-      "objective": "Negotiate the fare to the Mosque.",
-      "success_condition": "Agree on a price between ₦100 and ₦200."
+  
+    {
+      "id": "ha_1",
+      "language": "hausa",
+      "content": "Komai nisan jifa, ƙasa zai faɗo",
+      "literal_translation": "No matter how far a throw goes, it will land",
+      "meaning": "All actions have consequences.",
+      "rarity": "common"
     },
-    "key_vocabulary": [
-      { "word": "Masallaci", "meaning": "Mosque" },
-      { "word": "Nawane?", "meaning": "How much?" },
-      { "word": "Dari biyu", "meaning": "Two hundred" },
-      { "word": "Gaskiya", "meaning": "Truth/Honestly (used to bargain)" }
-    ],
-    "system_prompt_context": "You are a Keke driver. Start by asking 'Ina zuwa?' (Where are you going?). Quote ₦300 initially. If they say 'Gaskiya', lower it to ₦200."
-  },
-  {
-    "id": "hausa_market_fabric",
-    "language": "hausa",
-    "category": "Market",
-    "title": "Buying Ankara Fabric",
-    "difficulty": "advanced",
-    "description": "You are at Kantin Kwari market to buy fabric (Atamfa).",
-    "roles": {
-      "user": "A customer looking for high quality",
-      "ai": "The Fabric Merchant."
+    {
+      "id": "ha_2",
+      "language": "hausa",
+      "content": "Rana dubu ta barawo, rana ɗaya ta mai kaya",
+      "literal_translation": "A thousand days for the thief, one day for the owner",
+      "meaning": "Justice will eventually prevail.",
+      "rarity": "legendary"
     },
-    "mission": {
-      "objective": "Ask for the best quality material.",
-      "success_condition": "User must ask 'Mai kyau' (Good quality) or 'Na asali' (Original)."
+    {
+      "id": "ha_3",
+      "language": "hausa",
+      "content": "In ka ga gawa, ka ga darasi",
+      "literal_translation": "When you see a corpse, you see a lesson",
+      "meaning": "Learn from the misfortunes of others.",
+      "rarity": "uncommon"
     },
-    "key_vocabulary": [
-      { "word": "Atamfa", "meaning": "Patterned fabric/Ankara" },
-      { "word": "Mai kyau", "meaning": "The good one" },
-      { "word": "Rage min", "meaning": "Reduce it for me" }
-    ],
-    "system_prompt_context": "You are a merchant. Praise your goods highly. 'Wannan na waje ne' (This one is from abroad). Insist on the quality."
-  },
-  {
-    "id": "hausa_family_intro",
-    "language": "hausa",
-    "category": "Social",
-    "title": "Introduction to a Friend",
-    "difficulty": "beginner",
-    "description": "You meet your friend's brother, Ibrahim, for the first time.",
-    "roles": {
-      "user": "The new acquaintance",
-      "ai": "Ibrahim."
+    {
+      "id": "ha_4",
+      "language": "hausa",
+      "content": "Ba a maganin wauta",
+      "literal_translation": "There is no cure for foolishness",
+      "meaning": "Some behaviors cannot be corrected.",
+      "rarity": "common"
     },
-    "mission": {
-      "objective": "Introduce yourself and say you are happy to meet him.",
-      "success_condition": "User must say 'Sunana...' (My name is...) and 'Na ji dadin haduwa da kai' (Happy to meet you)."
-    },
-    "key_vocabulary": [
-      { "word": "Sunana", "meaning": "My name is" },
-      { "word": "Aboki", "meaning": "Friend" },
-      { "word": "Yaya aiki?", "meaning": "How is work?" }
-    ],
-    "system_prompt_context": "You are Ibrahim. Be polite. Ask where the user comes from ('Daga ina kake?')."
-  },
-
-  {
-    "id": "igbo_market_spareparts",
-    "language": "igbo",
-    "category": "Market",
-    "title": "The Spare Parts Deal",
-    "difficulty": "advanced",
-    "description": "You are at Ladipo Market buying a car part. The dealer is tough.",
-    "roles": {
-      "user": "A car owner needing a side mirror",
-      "ai": "Emeka, the spare parts dealer."
-    },
-    "mission": {
-      "objective": "Find out if the part is 'Original' or 'China' and negotiate.",
-      "success_condition": "User must ask 'O bu Original?' and negotiate the 'Last price'."
-    },
-    "key_vocabulary": [
-      { "word": "Kedu", "meaning": "Hello/How are you" },
-      { "word": "Ego ole?", "meaning": "How much money?" },
-      { "word": "Last price", "meaning": "Final offer (Commonly used)" },
-      { "word": "O di oke onu", "meaning": "It is too expensive" }
-    ],
-    "system_prompt_context": "You are Emeka. Speak Igbo mixed with Pidgin/English business terms. Insist your goods are 'Follow-come' (Original). 'Oga, dis one na original o!'. Start high."
-  },
-  {
-    "id": "igbo_greetings_village",
-    "language": "igbo",
-    "category": "Greetings",
-    "title": "Village Morning",
-    "difficulty": "beginner",
-    "description": "It is morning in the village. You see an elder woman (Mama).",
-    "roles": {
-      "user": "A young person walking by",
-      "ai": "Mama, sweeping her compound."
-    },
-    "mission": {
-      "objective": "Greet Mama for the morning.",
-      "success_condition": "User must say 'Ututu oma' (Good morning) or 'Mama, kedu?'."
-    },
-    "key_vocabulary": [
-      { "word": "Ututu oma", "meaning": "Good morning" },
-      { "word": "Mama", "meaning": "Mother/Elder woman" },
-      { "word": "I bola?", "meaning": "Did you wake up well?" }
-    ],
-    "system_prompt_context": "You are Mama. Reply 'Ututu oma nwam' (Good morning my child). Ask if they slept well 'I hiala ura?'."
-  },
-  {
-    "id": "igbo_food_swallow",
-    "language": "igbo",
-    "category": "Food",
-    "title": "Eating Fufu",
-    "difficulty": "intermediate",
-    "description": "You are at a restaurant. You want to eat Fufu (Akpu) with Egusi soup.",
-    "roles": {
-      "user": "A hungry customer",
-      "ai": "Nneka, the server."
-    },
-    "mission": {
-      "objective": "Order Akpu and Egusi.",
-      "success_condition": "User must specify the soup type clearly."
-    },
-    "key_vocabulary": [
-      { "word": "Nri", "meaning": "Food" },
-      { "word": "Akpu", "meaning": "Cassava Fufu" },
-      { "word": "Ofe Egusi", "meaning": "Melon seed soup" },
-      { "word": "Mmiri", "meaning": "Water" }
-    ],
-    "system_prompt_context": "You are Nneka. Ask 'Kedu ofe i choro?' (Which soup do you want?). We have Egusi, Ogbono, and Oha."
-  },
-  {
-    "id": "igbo_transport_bus",
-    "language": "igbo",
-    "category": "Transport",
-    "title": "Entering the Bus",
-    "difficulty": "beginner",
-    "description": "You are catching a bus from Enugu to Onitsha.",
-    "roles": {
-      "user": "Passenger",
-      "ai": "Park Tout / Loader."
-    },
-    "mission": {
-      "objective": "Ask if this bus is going to Onitsha.",
-      "success_condition": "User must ask 'O na-aga Onitsha?'."
-    },
-    "key_vocabulary": [
-      { "word": "Ebe a", "meaning": "Here" },
-      { "word": "Onitsha", "meaning": "Major city" },
-      { "word": "Banye", "meaning": "Enter" }
-    ],
-    "system_prompt_context": "You are loading the bus. Shout 'Onitsha! Onitsha! Otu onye! (One person left)'. Hurry the user up."
-  },
-  {
-    "id": "igbo_introduction_formal",
-    "language": "igbo",
-    "category": "Social",
-    "title": "Meeting the In-Laws",
-    "difficulty": "advanced",
-    "description": "You are visiting your fiancée's father for the first time.",
-    "roles": {
-      "user": "The suitor",
-      "ai": "Mazi Okeke, the father."
-    },
-    "mission": {
-      "objective": "Introduce yourself formally.",
-      "success_condition": "User must use the title 'Mazi' and state their name and intention respectfully."
-    },
-    "key_vocabulary": [
-      { "word": "Mazi", "meaning": "Sir/Mr (Traditional title)" },
-      { "word": "Aham bu", "meaning": "My name is" },
-      { "word": "Nno", "meaning": "Welcome" }
-    ],
-    "system_prompt_context": "You are Mazi Okeke. You are skeptical but polite. Ask 'Onye ka i bu?' (Who are you?) and 'Ebe ka i si?' (Where are you from?)."
-  }
-]
+    {
+      "id": "ha_5",
+      "language": "hausa",
+      "content": "Kowa ya ci alala, ya sha ruwa",
+      "literal_translation": "Whoever eats okra must drink water",
+      "meaning": "Every action has a responsibility attached.",
+      "rarity": "common"
+    }
+  ]
 ````
 
 ## File: backend/app/models/user.py
@@ -3792,30 +2240,272 @@ class Profile(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 ````
 
-## File: backend/app/tts/yarngpt_provider.py
+## File: backend/app/tts/__init__.py
 ````python
-import httpx
 from app.core.config import settings
+from app.core.logging import get_logger
 
-VOICE_MAP = {
-    "yoruba": "idera",
-    "hausa": "zainab",
-    "igbo": "adaora",
-}
+logger = get_logger(__name__)
 
 async def synthesize_speech(text: str, language: str) -> bytes:
-    voice_id = VOICE_MAP.get(language, "idera")
+    if settings.TTS_PROVIDER == "gemini":
+        from app.tts.gemini_provider import synthesize_speech as gemini_tts
+        audio = await gemini_tts(text, language)
+        if audio:
+            return audio
+        logger.warning("Gemini TTS produced empty audio; attempting YarnGPT fallback")
+        from app.tts.yarngpt_provider import synthesize_speech as yarngpt_tts
+        return await yarngpt_tts(text, language)
+    else:
+        from app.tts.yarngpt_provider import synthesize_speech as yarngpt_tts
+        audio = await yarngpt_tts(text, language)
+        if audio:
+            return audio
+        logger.warning("YarnGPT TTS produced empty audio; attempting Gemini fallback")
+        from app.tts.gemini_provider import synthesize_speech as gemini_tts
+        return await gemini_tts(text, language)
+````
+
+## File: backend/scripts/cleanup_old_audio.py
+````python
+"""
+Script to clean up audio files older than 30 days from Supabase Storage.
+Deletes files from storage and sets audio URLs to NULL in the database.
+"""
+import os
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+import logging
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.core.config import settings
+from app.core.supabase_client import supabase
+from app.models.conversation import Conversation
+from app.models.turn import Turn
+from app.core.logging import configure_logging, get_logger
+
+
+def cleanup_old_audio():
+    """
+    Clean up audio files older than 30 days.
+    """
+    configure_logging()
+    logger = get_logger(__name__)
+    # Create database session
+    engine = create_engine(settings.DATABASE_URL.replace("postgresql://", "postgresql+psycopg://"))
+    SessionLocal = sessionmaker(bind=engine)
+    db = SessionLocal()
+    
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            r = await client.post(
-                "https://yarngpt.ai/api/v1/tts",
-                headers={"Authorization": f"Bearer {settings.YARNGPT_API_KEY}"},
-                json={"text": text, "voice_id": voice_id, "language": language},
-            )
-            r.raise_for_status()
-            return r.content
-    except Exception:
-        return b""
+        # Calculate cutoff date (30 days ago)
+        cutoff_date = datetime.now() - timedelta(days=30)
+        logger.info("Cleaning up audio files older than %s", cutoff_date.isoformat())
+        
+        # Find old conversations
+        old_conversations = db.query(Conversation).filter(
+            Conversation.created_at < cutoff_date
+        ).all()
+        
+        logger.info("Found %s conversations older than 30 days", len(old_conversations))
+        
+        total_files_deleted = 0
+        total_turns_updated = 0
+        
+        for conv in old_conversations:
+            # Get all turns for this conversation
+            turns = db.query(Turn).filter(
+                Turn.conversation_id == conv.id
+            ).all()
+            
+            for turn in turns:
+                files_to_delete = []
+                
+                # Extract file paths from URLs
+                if turn.user_audio_url:
+                    # URL format: https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
+                    path = turn.user_audio_url.split(f"{settings.SUPABASE_BUCKET_NAME}/")[-1]
+                    files_to_delete.append(path)
+                
+                if turn.ai_response_audio_url:
+                    path = turn.ai_response_audio_url.split(f"{settings.SUPABASE_BUCKET_NAME}/")[-1]
+                    files_to_delete.append(path)
+                
+                # Delete files from Supabase Storage
+                for file_path in files_to_delete:
+                    try:
+                        supabase.storage.from_(settings.SUPABASE_BUCKET_NAME).remove([file_path])
+                        total_files_deleted += 1
+                        logger.info("Deleted: %s", file_path)
+                    except Exception as e:
+                        logger.exception("Error deleting %s: %s", file_path, str(e))
+                
+                # Update database to NULL audio URLs
+                if turn.user_audio_url or turn.ai_response_audio_url:
+                    turn.user_audio_url = None
+                    turn.ai_response_audio_url = None
+                    total_turns_updated += 1
+        
+        # Commit database changes
+        db.commit()
+        
+        logger.info("Cleanup complete:")
+        logger.info("- Files deleted: %s", total_files_deleted)
+        logger.info("- Turns updated: %s", total_turns_updated)
+        logger.info("- Conversations processed: %s", len(old_conversations))
+        
+    except Exception as e:
+        logger.exception("Error during cleanup: %s", str(e))
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    cleanup_old_audio()
+````
+
+## File: backend/scripts/poc_chain.py
+````python
+import asyncio
+import time
+import os
+import sys
+from pathlib import Path
+import httpx
+from app.core.logging import configure_logging, get_logger
+
+# Add parent directory to path to import from app
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from pydantic_ai import BinaryContent
+from app.ai.agent import get_agent
+
+async def test_chain(audio_file_path: str, language: str = "igbo"):
+    configure_logging()
+    logger = get_logger(__name__)
+    logger.info("Starting POC chain test with %s", audio_file_path)
+    logger.info("Language: %s", language)
+    
+    start_total = time.time()
+    
+    with open(audio_file_path, "rb") as f:
+        audio_bytes = f.read()
+    
+    logger.info("Audio file loaded: %s bytes", len(audio_bytes))
+    
+    # Get language-specific agent
+    agent = get_agent(language)
+    logger.info("Using language-specific agent for %s", language)
+    
+    start_gemini = time.time()
+    # Create BinaryContent for audio
+    audio_content = BinaryContent(data=audio_bytes, media_type="audio/webm")
+    
+    result = await agent.run([
+        f"The user is speaking {language}. Respond in {language}.",
+        audio_content
+    ])
+    gemini_time = time.time() - start_gemini
+    
+    data = result.output
+    logger.info("Gemini Response (%.2fs):", gemini_time)
+    logger.info("Transcription: %s", data.user_transcription)
+    logger.info("Grammar Correct: %s", data.grammar_is_correct)
+    logger.info("Correction: %s", data.correction_feedback)
+    logger.info("Reply (Local): %s", data.reply_text_local)
+    logger.info("Reply (English): %s", data.reply_text_english)
+    
+    start_tts = time.time()
+    yarngpt_key = os.getenv("YARNGPT_API_KEY", "YOUR_YARNGPT_API_KEY")
+    async with httpx.AsyncClient(timeout=20) as client:
+        tts_response = await client.post(
+            "https://yarngpt.ai/api/v1/tts",
+            headers={"Authorization": f"Bearer {yarngpt_key}"},
+            json={"text": data.reply_text_local, "voice_id": "idera", "language": language},
+        )
+        tts_response.raise_for_status()
+        audio_output = tts_response.content
+    tts_time = time.time() - start_tts
+    
+    output_file = Path("output_audio.wav")
+    output_file.write_bytes(audio_output)
+    logger.info("YarnGPT TTS (%.2fs):", tts_time)
+    logger.info("Audio saved to: %s", output_file)
+    
+    total_time = time.time() - start_total
+    logger.info("Total latency: %.2fs", total_time)
+    
+    if total_time > 4:
+        logger.warning("Warning: Latency exceeds 4s target")
+    else:
+        logger.info("Latency within 4s target")
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) < 2:
+        configure_logging()
+        get_logger(__name__).error("Usage: python poc_chain.py <audio_file_path> [language]")
+        sys.exit(1)
+    
+    audio_path = sys.argv[1]
+    lang = sys.argv[2] if len(sys.argv) > 2 else "yoruba"
+    
+    asyncio.run(test_chain(audio_path, lang))
+````
+
+## File: backend/scripts/seed_db.py
+````python
+import json
+import sys
+from pathlib import Path
+
+# Add parent directory to path to import app modules
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from app.db.base import SessionLocal
+from app.models.gamification import Proverb
+from sqlalchemy.exc import IntegrityError
+from app.core.logging import configure_logging, get_logger
+
+DATA_DIR = Path(__file__).parent.parent / "app" / "data"
+
+def seed_proverbs():
+    configure_logging()
+    logger = get_logger(__name__)
+    db = SessionLocal()
+    logger.info("Seeding Proverbs...")
+    
+    try:
+        with open(DATA_DIR / "proverbs.json", "r") as f:
+            proverbs_data = json.load(f)
+            
+        count = 0
+        for item in proverbs_data:
+            # Check if exists
+            exists = db.query(Proverb).filter_by(id=item['id']).first()
+            if not exists:
+                p = Proverb(**item)
+                db.add(p)
+                count += 1
+        
+        db.commit()
+        logger.info("Added %s new proverbs.", count)
+        
+    except FileNotFoundError:
+        logger.error("proverbs.json not found!")
+    except Exception as e:
+        logger.exception("Error: %s", e)
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    seed_proverbs()
 ````
 
 ## File: backend/requirements.txt
@@ -3834,278 +2524,962 @@ pyjwt==2.10.1
 supabase==2.24.0
 ````
 
-## File: frontend/src/lib/api.ts
+## File: frontend/src/components/CulturalAlert.tsx
 ````typescript
-import { supabase } from './supabaseClient'
+import { useEffect, useState } from 'react'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+export default function CulturalAlert({ feedback }: { feedback: string | null }) {
+  const [visible, setVisible] = useState(false)
 
-async function getAuthToken(): Promise<string | null> {
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.access_token || null
+  useEffect(() => {
+    if (feedback) {
+      setVisible(true)
+      const timer = setTimeout(() => setVisible(false), 6000)
+      return () => clearTimeout(timer)
+    }
+  }, [feedback])
+
+  if (!visible || !feedback) return null
+
+  return (
+    <div className="fixed inset-0 flex items-center justify-center z-[100] pointer-events-none p-4">
+      <div className="bg-red-600 text-white p-6 rounded-3xl shadow-[0_20px_60px_-15px_rgba(220,38,38,0.5)] animate-bounce-in max-w-sm text-center border-8 border-yellow-400 relative overflow-hidden">
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/zigzag.png')]"></div>
+        
+        <div className="relative z-10">
+            <div className="text-6xl mb-2 filter drop-shadow-md">🚩</div>
+            <div className="text-2xl font-display font-bold mb-2 uppercase tracking-wide">Culture Penalty!</div>
+            <div className="w-16 h-1 bg-yellow-400 mx-auto mb-4 rounded-full"></div>
+            <p className="text-red-100 font-medium text-lg leading-snug">{feedback}</p>
+        </div>
+      </div>
+      <style>{`
+        @keyframes bounce-in {
+          0% { transform: scale(0.3); opacity: 0; }
+          50% { transform: scale(1.05); opacity: 1; }
+          70% { transform: scale(0.9); }
+          100% { transform: scale(1); }
+        }
+        .animate-bounce-in { animation: bounce-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+      `}</style>
+    </div>
+  )
 }
+````
 
-export async function apiRequest(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<Response> {
-  const token = await getAuthToken()
+## File: frontend/src/components/ProverbCard.tsx
+````typescript
+interface Proverb {
+    content: string
+    literal_translation: string
+    meaning: string
+    rarity: 'common' | 'rare' | 'legendary'
+}
   
-  const headers = new Headers(options.headers)
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`)
+export default function ProverbCard({ proverb, onClose }: { proverb: Proverb, onClose: () => void }) {
+    const getColors = () => {
+      if (proverb.rarity === 'legendary') return 'from-yellow-400 via-yellow-500 to-yellow-600 shadow-yellow-500/50'
+      if (proverb.rarity === 'rare') return 'from-purple-400 via-purple-500 to-purple-600 shadow-purple-500/50'
+      return 'from-gray-200 via-gray-300 to-gray-400 text-gray-800'
+    }
+  
+    return (
+      <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-300">
+        <div className={`w-full max-w-sm bg-gradient-to-br ${getColors()} p-1.5 rounded-[2.5rem] shadow-2xl transform transition-all animate-card-reveal rotate-1 hover:rotate-0`}>
+          
+          {/* Inner Content - Physical Card Look */}
+          <div className="bg-[#FAF9F6] rounded-[2.2rem] p-8 h-full text-center relative overflow-hidden border-[6px] border-white/40 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] shadow-inner">
+            
+            {/* Decorative Corner Patterns */}
+            <div className="absolute top-0 left-0 w-20 h-20 border-t-[8px] border-l-[8px] border-naija-primary/20 rounded-tl-[1.8rem]"></div>
+            <div className="absolute bottom-0 right-0 w-20 h-20 border-b-[8px] border-r-[8px] border-naija-primary/20 rounded-br-[1.8rem]"></div>
+
+            {/* Rarity Badge */}
+            <div className={`absolute top-6 right-6 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-[0.2em] shadow-sm
+                ${proverb.rarity === 'legendary' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-200 text-gray-600'}
+            `}>
+              {proverb.rarity}
+            </div>
+  
+            <div className="mt-12 mb-8 relative z-10">
+              <i className="ph-fill ph-quotes text-4xl text-naija-accent/20 mb-4 block mx-auto"></i>
+              <h2 className="text-3xl font-display font-bold mb-6 text-naija-dark leading-tight">
+                {proverb.content}
+              </h2>
+              <p className="text-sm font-medium text-gray-500 italic mb-6 font-serif">
+                "{proverb.literal_translation}"
+              </p>
+            </div>
+  
+            <div className="bg-naija-adire/5 p-5 rounded-2xl mb-8 border border-naija-adire/10 relative z-10">
+              <p className="text-xs uppercase font-bold text-naija-adire mb-2 tracking-widest">Ancient Wisdom</p>
+              <p className="text-naija-dark font-medium leading-relaxed">{proverb.meaning}</p>
+            </div>
+  
+            <button 
+              onClick={onClose}
+              className="w-full bg-naija-dark text-white py-4 rounded-2xl font-bold hover:bg-black transition shadow-lg shadow-black/20 flex items-center justify-center gap-2 group"
+            >
+              <span>Collect Wisdom</span>
+              <i className="ph-bold ph-check-circle text-xl group-hover:scale-110 transition-transform"></i>
+            </button>
+          </div>
+        </div>
+        <style>{`
+          @keyframes card-reveal {
+            0% { opacity: 0; transform: translateY(100px) rotateY(90deg) scale(0.8); }
+            100% { opacity: 1; transform: translateY(0) rotateY(0) scale(1); }
+          }
+          .animate-card-reveal { animation: card-reveal 0.8s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        `}</style>
+      </div>
+    )
   }
+````
+
+## File: frontend/src/components/ScenarioModal.tsx
+````typescript
+import { Scenario } from '../lib/api'
+import { XIcon, UserIcon, RobotIcon, TargetIcon, BookOpenIcon, RocketLaunchIcon, WarningCircleIcon } from '@phosphor-icons/react'
+
+interface ScenarioModalProps {
+  scenario: Scenario
+  onClose: () => void
+  onStart: () => void
+}
+
+export default function ScenarioModal({ scenario, onClose, onStart }: ScenarioModalProps) {
   
-  return fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  })
-}
-
-// Type definitions
-export type Language = 'yoruba' | 'hausa' | 'igbo'
-export type Proficiency = 'beginner' | 'intermediate' | 'advanced'
-
-export interface UserProfile {
-  id: string
-  email: string
-  target_language: Language | null
-  proficiency_level: Proficiency | null
-  created_at: string
-}
-
-export interface ScenarioRoles {
-  user: string
-  ai: string
-}
-
-export interface ScenarioMission {
-  objective: string
-  success_condition: string
-}
-
-export interface KeyVocabulary {
-  word: string
-  meaning: string
-}
-
-export interface HaggleSettings {
-  start_price: number
-  target_price: number
-  reserve_price: number
-}
-
-export interface Scenario {
-  id: string
-  language: Language
-  category?: string
-  title: string
-  difficulty: string
-  description?: string
-  roles?: ScenarioRoles
-  mission?: ScenarioMission
-  key_vocabulary?: KeyVocabulary[]
-  system_prompt_context?: string
-  haggle_settings?: HaggleSettings
-}
-
-export interface ConversationStart {
-  conversation_id: string
-  initial_ai_greeting?: string
-  initial_ai_audio_url?: string
-}
-
-export interface TurnResponse {
-  turn_number: number
-  transcription: string
-  ai_text: string
-  ai_text_english: string | null
-  ai_audio_url: string
-  correction: string | null
-  grammar_score: number | null
-  sentiment_score: number | null
-  negotiated_price: number | null
-}
-
-export interface ConversationHistory {
-  conversation_id: string
-  scenario_title: string
-  scenario_id: string
-  created_at: string
-  turn_count: number
-  last_message: string | null
-  active: boolean
-}
-
-export interface SavedWord {
-  id: number
-  word: string
-  translation: string
-  context_sentence: string | null
-  language: Language
-  created_at: string
-}
-
-// API functions
-export async function updateUserProfile(
-  target_language: Language,
-  proficiency_level: Proficiency
-): Promise<UserProfile> {
-  const response = await apiRequest('/api/v1/user/profile', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target_language, proficiency_level }),
-  })
-  
-  if (!response.ok) {
-    throw new Error('Failed to update profile')
+  const getDifficultyColor = (diff: string) => {
+    switch(diff) {
+        case 'beginner': return 'bg-green-400 text-green-950';
+        case 'intermediate': return 'bg-yellow-400 text-yellow-950';
+        case 'advanced': return 'bg-red-400 text-red-950';
+        default: return 'bg-gray-200';
+    }
   }
-  
-  return response.json()
-}
 
-export async function getUserProfile(): Promise<UserProfile> {
-  const response = await apiRequest('/api/v1/user/profile')
+  return (
+    <div className="fixed inset-0 bg-naija-dark/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+      <div className="bg-[#F9F7F2] rounded-[2.5rem] max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border-[6px] border-white relative">
+        
+        {/* Decorative Top Pattern */}
+        <div className="absolute top-0 left-0 right-0 h-32 bg-naija-primary bg-ankara-pattern opacity-10 rounded-t-[2rem] pointer-events-none"></div>
+
+        {/* Header */}
+        <div className="relative p-8 pb-4">
+          <div className="flex justify-between items-start">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-sm ${getDifficultyColor(scenario.difficulty)}`}>
+                  {scenario.difficulty}
+                </span>
+                {scenario.category && (
+                  <span className="px-3 py-1 bg-white border border-gray-200 text-gray-500 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-sm">
+                    {scenario.category}
+                  </span>
+                )}
+              </div>
+              <h2 className="text-3xl font-display font-bold text-naija-dark leading-tight">
+                {scenario.title}
+              </h2>
+            </div>
+            <button
+              onClick={onClose}
+              className="bg-white hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-full p-2 transition shadow-sm border border-gray-100"
+            >
+              <XIcon size={24} weight="bold" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="px-8 pb-8 space-y-8">
+          
+          {/* Scenario Description */}
+          <div className="text-gray-600 text-lg leading-relaxed font-medium">
+            {scenario.description}
+          </div>
+
+          {/* Roles - Split Card Design */}
+          {scenario.roles && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* User Role */}
+              <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <UserIcon size={64} weight="fill" className="text-naija-primary" />
+                </div>
+                <div className="relative z-10">
+                    <div className="flex items-center gap-2 mb-2 text-naija-primary font-bold font-display uppercase tracking-wide text-sm">
+                        <UserIcon size={18} weight="bold" />
+                        You
+                    </div>
+                    <p className="text-naija-dark font-medium leading-snug">{scenario.roles.user}</p>
+                </div>
+              </div>
+
+              {/* AI Role */}
+              <div className="bg-naija-adire p-5 rounded-3xl shadow-sm relative overflow-hidden text-white group">
+                <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <RobotIcon size={64} weight="fill" className="text-white" />
+                </div>
+                <div className="relative z-10">
+                    <div className="flex items-center gap-2 mb-2 text-indigo-200 font-bold font-display uppercase tracking-wide text-sm">
+                        <RobotIcon size={18} weight="bold" />
+                        The AI
+                    </div>
+                    <p className="text-indigo-50 font-medium leading-snug">{scenario.roles.ai}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Mission Ticket */}
+          {scenario.mission && (
+            <div className="relative bg-amber-50 rounded-3xl border-2 border-dashed border-amber-200 p-6">
+              <div className="absolute -top-3 left-6 bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-xs font-bold uppercase flex items-center gap-1 border border-amber-200">
+                <TargetIcon size={16} weight="fill" />
+                Mission Objective
+              </div>
+              
+              <div className="space-y-4 pt-2">
+                <div>
+                  <h4 className="font-bold text-naija-dark mb-1">Your Goal</h4>
+                  <p className="text-gray-700">{scenario.mission.objective}</p>
+                </div>
+                
+                <div className="flex gap-3 items-start bg-white/50 p-3 rounded-xl border border-amber-100">
+                    <div className="mt-0.5 text-amber-600">
+                        <WarningCircleIcon size={20} weight="duotone" />
+                    </div>
+                    <div>
+                        <span className="text-xs font-bold text-amber-600 uppercase">Win Condition</span>
+                        <p className="text-sm text-gray-600 leading-snug">{scenario.mission.success_condition}</p>
+                    </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cheat Sheet */}
+          {scenario.key_vocabulary && scenario.key_vocabulary.length > 0 && (
+            <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100">
+              <div className="flex items-center gap-2 mb-4 text-gray-400 font-bold uppercase tracking-widest text-xs">
+                <BookOpenIcon size={18} weight="duotone" />
+                Cheat Sheet
+              </div>
+              <div className="grid gap-3">
+                {scenario.key_vocabulary.map((vocab, index) => (
+                  <div key={index} className="flex justify-between items-center bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                    <span className="font-bold text-naija-dark">{vocab.word}</span>
+                    <span className="text-sm text-gray-500">{vocab.meaning}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer Action */}
+        <div className="p-6 pt-0 bg-gradient-to-t from-[#F9F7F2] to-transparent sticky bottom-0 z-20">
+            <button
+                onClick={onStart}
+                className="w-full py-4 bg-naija-primary hover:bg-green-800 text-white rounded-2xl font-bold font-display text-lg shadow-xl shadow-green-900/20 transform transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center gap-3"
+            >
+                <RocketLaunchIcon size={24} weight="fill" />
+                Start Mission
+            </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+````
+
+## File: frontend/src/pages/LandingPage.tsx
+````typescript
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
+import { getUserProfile } from '../lib/api'
+
+export default function LandingPage() {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const [onboarded, setOnboarded] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (!user) {
+      setOnboarded(null)
+      return
+    }
+    getUserProfile()
+      .then(p => setOnboarded(Boolean(p.target_language && p.proficiency_level)))
+      .catch(() => setOnboarded(null))
+  }, [user])
+
+  return (
+    <div className="min-h-screen bg-naija-paper bg-ankara-pattern">
+      <div className="max-w-5xl mx-auto px-6 py-16">
+        <header className="flex items-center justify-between mb-16">
+          <h1 className="text-2xl font-display font-bold text-naija-dark">TalkNative</h1>
+          <button
+            onClick={() => navigate(user ? (onboarded ? '/dashboard' : '/onboarding') : '/login')}
+            className="px-4 py-2 rounded-lg bg-naija-primary text-white font-semibold hover:bg-green-700 transition"
+          >
+            {user ? (onboarded ? 'Dashboard' : 'Onboarding') : 'Sign In'}
+          </button>
+        </header>
+
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+          <div>
+            <h2 className="text-4xl md:text-5xl font-display font-bold text-naija-dark leading-tight mb-4">
+              Learn Yoruba, Hausa, and Igbo through conversation
+            </h2>
+            <p className="text-gray-700 text-lg mb-8">
+              Practice with culturally-aware scenarios, get instant feedback, and earn wisdom cards as you improve.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => navigate(user ? (onboarded ? '/dashboard' : '/onboarding') : '/login')}
+                className="px-6 py-3 rounded-xl bg-naija-adire text-white font-bold hover:opacity-90 transition"
+              >
+                {user ? (onboarded ? 'Dashboard' : 'Onboarding') : 'Get Started'}
+              </button>
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="px-6 py-3 rounded-xl bg-white border border-gray-200 text-naija-dark font-semibold hover:bg-gray-50 transition"
+              >
+                Browse Scenarios
+              </button>
+            </div>
+          </div>
+          <div className="bg-white rounded-3xl shadow-xl border border-gray-100 p-8">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-green-50 border border-green-100 rounded-2xl p-4">
+                <div className="text-sm font-bold text-green-800">Live Practice</div>
+                <div className="text-gray-700 text-sm">Speak and get corrections instantly</div>
+              </div>
+              <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+                <div className="text-sm font-bold text-amber-800">Cultural Cues</div>
+                <div className="text-gray-700 text-sm">Learn local etiquette</div>
+              </div>
+              <div className="bg-purple-50 border border-purple-100 rounded-2xl p-4">
+                <div className="text-sm font-bold text-purple-800">Wisdom Deck</div>
+                <div className="text-gray-700 text-sm">Collect proverbs as you progress</div>
+              </div>
+              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4">
+                <div className="text-sm font-bold text-blue-800">Guided Goals</div>
+                <div className="text-gray-700 text-sm">Scenario-based missions</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  )
+}
+````
+
+## File: frontend/src/pages/OnboardingPage.tsx
+````typescript
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
+import { updateUserProfile, Language, Proficiency } from '../lib/api'
+
+export default function OnboardingPage() {
+  const [step, setStep] = useState(1)
+  const [language, setLanguage] = useState<Language | null>(null)
+  const [proficiency, setProficiency] = useState<Proficiency | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
-  if (!response.ok) {
-    throw new Error('Failed to get profile')
+  const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const languages: { value: Language; label: string; flag: string }[] = [
+    { value: 'yoruba', label: 'Yoruba', flag: '🇳🇬' },
+    { value: 'hausa', label: 'Hausa', flag: '🇳🇬' },
+    { value: 'igbo', label: 'Igbo', flag: '🇳🇬' },
+  ]
+
+  const levels: { value: Proficiency; label: string; description: string }[] = [
+    { value: 'beginner', label: 'Beginner', description: 'Just starting out' },
+    { value: 'intermediate', label: 'Intermediate', description: 'Can hold basic conversations' },
+    { value: 'advanced', label: 'Advanced', description: 'Fluent speaker' },
+  ]
+
+  const handleSubmit = async () => {
+    if (!language || !proficiency) return
+    
+    setLoading(true)
+    setError(null)
+
+    try {
+      await updateUserProfile(language, proficiency)
+      navigate('/dashboard')
+    } catch (err: any) {
+      setError(err.message || 'Failed to save profile')
+    } finally {
+      setLoading(false)
+    }
   }
-  
-  return response.json()
-}
 
-export async function getScenarios(): Promise<Scenario[]> {
-  const response = await apiRequest('/api/v1/scenarios')
-  
-  if (!response.ok) {
-    throw new Error('Failed to get scenarios')
+  return (
+    <div className="min-h-screen bg-naija-paper bg-ankara-pattern">
+      <div className="max-w-5xl mx-auto px-6 py-16">
+        <header className="flex items-center justify-between mb-12">
+          <h1 className="text-2xl font-display font-bold text-naija-dark">TalkNative</h1>
+          <button
+            onClick={() => navigate(user ? '/dashboard' : '/')}
+            className="px-4 py-2 rounded-lg bg-naija-primary text-white font-semibold hover:bg-green-700 transition"
+          >
+            {user ? 'Dashboard' : 'Home'}
+          </button>
+        </header>
+
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-display font-bold text-naija-dark mb-2">
+              Welcome to TalkNative!
+            </h1>
+            <p className="text-gray-700">
+              Let's personalize your learning experience
+            </p>
+          </div>
+
+        {/* Progress indicator */}
+        <div className="flex justify-center mb-8">
+          <div className="flex items-center space-x-2">
+            <div className={`w-3 h-3 rounded-full ${step >= 1 ? 'bg-blue-600' : 'bg-gray-300'}`} />
+            <div className={`w-12 h-1 ${step >= 2 ? 'bg-blue-600' : 'bg-gray-300'}`} />
+            <div className={`w-3 h-3 rounded-full ${step >= 2 ? 'bg-blue-600' : 'bg-gray-300'}`} />
+          </div>
+        </div>
+
+        {step === 1 && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-semibold text-center mb-6">
+              What language do you want to learn?
+            </h2>
+            <div className="grid grid-cols-1 gap-4">
+              {languages.map((lang) => (
+                <button
+                  key={lang.value}
+                  onClick={() => setLanguage(lang.value)}
+                  className={`p-6 rounded-xl border-2 transition-all ${
+                    language === lang.value
+                      ? 'border-naija-adire bg-indigo-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center space-x-4">
+                    <span className="text-4xl">{lang.flag}</span>
+                    <span className="text-xl font-semibold">{lang.label}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setStep(2)}
+              disabled={!language}
+              className="w-full mt-6 bg-naija-adire text-white py-3 rounded-lg font-semibold hover:opacity-90 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+            >
+              Next
+            </button>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-semibold text-center mb-6">
+              What's your current level?
+            </h2>
+            <div className="grid grid-cols-1 gap-4">
+              {levels.map((level) => (
+                <button
+                  key={level.value}
+                  onClick={() => setProficiency(level.value)}
+                  className={`p-6 rounded-xl border-2 transition-all text-left ${
+                    proficiency === level.value
+                      ? 'border-naija-adire bg-indigo-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="font-semibold text-lg">{level.label}</div>
+                  <div className="text-gray-600 text-sm">{level.description}</div>
+                </button>
+              ))}
+            </div>
+
+            {error && (
+              <div className="p-4 rounded-lg bg-red-50 text-red-800 text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="flex space-x-4">
+              <button
+                onClick={() => setStep(1)}
+                className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition"
+              >
+                Back
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={!proficiency || loading}
+                className="flex-1 bg-naija-adire text-white py-3 rounded-lg font-semibold hover:opacity-90 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+              >
+                {loading ? 'Saving...' : 'Get Started'}
+              </button>
+            </div>
+          </div>
+        )}
+        </div>
+      </div>
+    </div>
+  )
+}
+````
+
+## File: frontend/src/index.css
+````css
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    /* We use theme() function here as a safer fallback if @apply acts up during hot-reload */
+    background-color: theme('colors.naija.paper'); 
+    color: theme('colors.naija.dark');
+    font-family: theme('fontFamily.sans');
+    
+    /* Subtle texture overlay */
+    background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%239C92AC' fill-opacity='0.03' fill-rule='evenodd'/%3E%3C/svg%3E");
   }
-  
-  return response.json()
-}
 
-export async function startConversation(scenarioId: string): Promise<ConversationStart> {
-  const response = await apiRequest('/api/v1/chat/start', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scenario_id: scenarioId }),
-  })
-  
-  if (!response.ok) {
-    throw new Error('Failed to start conversation')
-  }
-  
-  return response.json()
-}
-
-export async function sendTurn(
-  conversationId: string,
-  audioBlob: Blob
-): Promise<TurnResponse> {
-  const formData = new FormData()
-  formData.append('file', audioBlob, 'audio.webm')
-  
-  const response = await apiRequest(`/api/v1/chat/${conversationId}/turn`, {
-    method: 'POST',
-    body: formData,
-  })
-  
-  if (!response.ok) {
-    throw new Error('Failed to send turn')
-  }
-  
-  return response.json()
-}
-
-export async function getConversationTurns(conversationId: string): Promise<TurnResponse[]> {
-  const response = await apiRequest(`/api/v1/chat/${conversationId}/turns`)
-  
-  if (!response.ok) {
-    throw new Error('Failed to load conversation history')
-  }
-  
-  return response.json()
-}
-
-export async function getConversationHistory(): Promise<ConversationHistory[]> {
-  const response = await apiRequest('/api/v1/chat/history')
-  
-  if (!response.ok) {
-    throw new Error('Failed to load conversation history')
-  }
-  
-  return response.json()
-}
-
-export async function getScenarioById(scenarioId: string): Promise<Scenario | null> {
-  const scenarios = await getScenarios()
-  return scenarios.find(s => s.id === scenarioId) || null
-}
-
-export async function saveWord(
-  word: string,
-  translation: string,
-  contextSentence?: string
-): Promise<SavedWord> {
-  const response = await apiRequest('/api/v1/vocabulary/save', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      word,
-      translation,
-      context_sentence: contextSentence
-    })
-  })
-  
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to save word')
-  }
-  
-  return response.json()
-}
-
-export async function getSavedWords(): Promise<SavedWord[]> {
-  const response = await apiRequest('/api/v1/vocabulary')
-  
-  if (!response.ok) {
-    throw new Error('Failed to load saved words')
-  }
-  
-  return response.json()
-}
-
-export async function deleteSavedWord(wordId: number): Promise<void> {
-  const response = await apiRequest(`/api/v1/vocabulary/${wordId}`, {
-    method: 'DELETE'
-  })
-  
-  if (!response.ok) {
-    throw new Error('Failed to delete word')
+  h1, h2, h3, h4, h5, h6 {
+    font-family: theme('fontFamily.display');
+    letter-spacing: theme('letterSpacing.tight');
   }
 }
 
-export async function getUserProgress() {
-  const response = await apiRequest('/api/v1/game/progress')
-  if (!response.ok) throw new Error('Failed to fetch progress')
-  return response.json()
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(46, 125, 50, 0.3); /* naija-primary with opacity */
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(46, 125, 50, 0.6);
+}
+````
+
+## File: frontend/src/vite-env.d.ts
+````typescript
+/// <reference types="vite/client" />
+
+interface ImportMetaEnv {
+  readonly VITE_API_BASE_URL: string
+  readonly VITE_SUPABASE_URL: string
+  readonly VITE_SUPABASE_ANON_KEY: string
 }
 
-export async function finishScenario(scenarioId: string, stars: number) {
-  const response = await apiRequest('/api/v1/game/finish_scenario', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ scenario_id: scenarioId, stars }),
-  })
-  if (!response.ok) throw new Error('Failed to update progress')
-  return response.json()
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
+````
+
+## File: frontend/.gitignore
+````
+node_modules
+dist
+*.log
+.env
+.DS_Store
+````
+
+## File: frontend/tailwind.config.js
+````javascript
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Outfit', 'sans-serif'],
+        display: ['Clash Display', 'sans-serif'],
+      },
+      colors: {
+        naija: {
+          dark: '#1A1A1A',
+          primary: '#2E7D32', // Nigerian Green
+          secondary: '#FFD700', // Danfo Yellow
+          accent: '#E65100', // Terracotta
+          adire: '#1A237E', // Deep Indigo
+          paper: '#F9F7F2', // Off-white textured
+          surface: '#FFFFFF',
+        }
+      },
+      backgroundImage: {
+        'ankara-pattern': "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232E7D32' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
+      },
+      animation: {
+        'float': 'float 3s ease-in-out infinite',
+      },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
+        }
+      }
+    },
+  },
+  plugins: [],
+}
+````
+
+## File: frontend/tsconfig.node.json
+````json
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["vite.config.ts"]
+}
+````
+
+## File: backend/alembic/versions/002_phase2_schema.py
+````python
+"""Phase 2: Add users, update conversations and turns
+
+Revision ID: 002
+Revises: 001
+Create Date: 2025-11-29
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+revision = '002'
+down_revision = '001'
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # Create profiles table (not 'users' to avoid conflict with Supabase auth.users)
+    op.create_table('profiles',
+        sa.Column('id', sa.String(), nullable=False),
+        sa.Column('email', sa.String(), nullable=False),
+        sa.Column('target_language', sa.Enum('yoruba', 'hausa', 'igbo', name='languageenum'), nullable=True),
+        sa.Column('proficiency_level', sa.Enum('beginner', 'intermediate', 'advanced', name='proficiencyenum'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_profiles_id'), 'profiles', ['id'], unique=False)
+    op.create_index(op.f('ix_profiles_email'), 'profiles', ['email'], unique=True)
+    
+    # Drop old conversations table and recreate with new schema
+    op.drop_index('ix_conversations_id', table_name='conversations')
+    op.drop_table('turns')  # Drop turns first due to FK
+    op.drop_table('conversations')
+    
+    # Create new conversations table
+    op.create_table('conversations',
+        sa.Column('id', sa.String(), nullable=False),
+        sa.Column('user_id', sa.String(), nullable=False),
+        sa.Column('scenario_id', sa.String(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('active', sa.Boolean(), nullable=False, server_default='true'),
+        sa.ForeignKeyConstraint(['user_id'], ['profiles.id'], ),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_conversations_id'), 'conversations', ['id'], unique=False)
+    op.create_index(op.f('ix_conversations_user_id'), 'conversations', ['user_id'], unique=False)
+    op.create_index(op.f('ix_conversations_scenario_id'), 'conversations', ['scenario_id'], unique=False)
+    
+    # Create new turns table
+    op.create_table('turns',
+        sa.Column('id', sa.Integer(), nullable=False, autoincrement=True),
+        sa.Column('conversation_id', sa.String(), nullable=False),
+        sa.Column('turn_number', sa.Integer(), nullable=False),
+        sa.Column('user_audio_url', sa.String(), nullable=True),
+        sa.Column('user_transcription', sa.Text(), nullable=False),
+        sa.Column('ai_response_text', sa.Text(), nullable=False),
+        sa.Column('ai_response_text_english', sa.Text(), nullable=True),
+        sa.Column('ai_response_audio_url', sa.String(), nullable=True),
+        sa.Column('grammar_correction', sa.Text(), nullable=True),
+        sa.Column('grammar_score', sa.Integer(), nullable=True),
+        sa.ForeignKeyConstraint(['conversation_id'], ['conversations.id'], ),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_turns_id'), 'turns', ['id'], unique=False)
+    op.create_index(op.f('ix_turns_conversation_id'), 'turns', ['conversation_id'], unique=False)
+
+
+def downgrade() -> None:
+    # Drop new tables
+    op.drop_index(op.f('ix_turns_conversation_id'), table_name='turns')
+    op.drop_index(op.f('ix_turns_id'), table_name='turns')
+    op.drop_table('turns')
+    
+    op.drop_index(op.f('ix_conversations_scenario_id'), table_name='conversations')
+    op.drop_index(op.f('ix_conversations_user_id'), table_name='conversations')
+    op.drop_index(op.f('ix_conversations_id'), table_name='conversations')
+    op.drop_table('conversations')
+    
+    op.drop_index(op.f('ix_profiles_email'), table_name='profiles')
+    op.drop_index(op.f('ix_profiles_id'), table_name='profiles')
+    op.drop_table('profiles')
+    
+    # Recreate old schema (simplified version)
+    op.create_table('conversations',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('language', sa.String(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_conversations_id'), 'conversations', ['id'], unique=False)
+````
+
+## File: backend/app/core/config.py
+````python
+from pydantic_settings import BaseSettings
+from typing import Literal
+
+class Settings(BaseSettings):
+    GOOGLE_API_KEY: str
+    YARNGPT_API_KEY: str
+    DATABASE_URL: str
+    CORS_ALLOW_ORIGINS: list[str] = ["*"]
+    LOG_LEVEL: str = "INFO"
+    
+    TTS_PROVIDER: Literal["yarngpt", "gemini"] = "yarngpt"
+    
+    # Supabase configuration
+    SUPABASE_URL: str
+    SUPABASE_SERVICE_KEY: str
+    SUPABASE_JWT_SECRET: str
+    SUPABASE_BUCKET_NAME: str = "chat-audio"
+
+    model_config = {
+        "env_file": ".env",
+        "extra": "ignore",
+    }
+
+settings = Settings()
+````
+
+## File: backend/app/core/storage.py
+````python
+"""Supabase Storage helper for audio uploads."""
+
+import os
+import logging
+import asyncio
+from app.core.logging import get_logger
+from typing import Optional
+from app.core.supabase_client import supabase
+from app.core.config import settings
+
+class StorageManager:
+    """Manage audio file uploads to Supabase Storage."""
+    
+    def __init__(self):
+        self.bucket_name = settings.SUPABASE_BUCKET_NAME
+    
+    def _get_object_key(
+        self,
+        user_id: str,
+        conversation_id: str,
+        turn_number: int,
+        file_type: str,  # 'user' or 'ai'
+        extension: str = "webm"
+    ) -> str:
+        """
+        Generate standardized object key for audio files.
+        
+        Pattern: {user_id}/{conversation_id}/{turn_number}/{type}.webm
+        """
+        return f"{user_id}/{conversation_id}/{turn_number}/{file_type}.{extension}"
+    
+    async def upload_audio(
+        self,
+        audio_data: bytes,
+        user_id: str,
+        conversation_id: str,
+        turn_number: int,
+        file_type: str,  # 'user' or 'ai'
+        content_type: str = "audio/webm",
+        extension: str | None = None,
+        ) -> Optional[str]:
+        """
+        Upload audio to Supabase Storage and return public URL.
+        
+        Returns:
+            Public URL of the uploaded file, or None if upload fails
+        """
+        ext = extension or (
+            "wav" if content_type == "audio/wav" else
+            "mp3" if content_type == "audio/mpeg" else
+            "webm"
+        )
+        object_key = self._get_object_key(user_id, conversation_id, turn_number, file_type, ext)
+        attempts = 3
+        for i in range(attempts):
+            try:
+                response = supabase.storage.from_(self.bucket_name).upload(
+                    path=object_key,
+                    file=audio_data,
+                    file_options={"content_type": content_type, "x-upsert": "true"}
+                )
+                public_url = supabase.storage.from_(self.bucket_name).get_public_url(object_key)
+                return public_url
+            except Exception as e:
+                logger.warning("Upload attempt %s failed for %s: %s", i + 1, object_key, e)
+                if i < attempts - 1:
+                    await asyncio.sleep(0.8 * (i + 1))
+                else:
+                    logger.exception("Error uploading audio to Supabase Storage: %s", e)
+                    return None
+    
+    async def delete_audio(
+        self,
+        user_id: str,
+        conversation_id: str,
+        turn_number: int,
+        file_type: str
+    ) -> bool:
+        """Delete audio file from storage."""
+        try:
+            object_key = self._get_object_key(user_id, conversation_id, turn_number, file_type)
+            supabase.storage.from_(self.bucket_name).remove([object_key])
+            return True
+        except Exception as e:
+            logger.exception("Error deleting audio: %s", e)
+            return False
+
+# Singleton instance
+storage_manager = StorageManager()
+logger = get_logger(__name__)
+````
+
+## File: backend/app/data/proverb_loader.py
+````python
+import json
+from pathlib import Path
+from typing import List, Optional, Dict
+from functools import lru_cache
+from app.core.logging import get_logger
+
+PROVERBS_FILE = Path(__file__).parent / "proverbs.json"
+
+class ProverbLoader:
+    def __init__(self):
+        self._proverbs: Dict[str, dict] = {}
+        self._load_proverbs()
+    
+    def _load_proverbs(self):
+        if not PROVERBS_FILE.exists():
+            logger.warning("%s not found", PROVERBS_FILE)
+            return
+        
+        with open(PROVERBS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            # Index by ID
+            self._proverbs = {p['id']: p for p in data}
+
+    def get_proverb(self, proverb_id: str) -> Optional[dict]:
+        return self._proverbs.get(proverb_id)
+
+    def get_proverbs_by_language(self, language: str) -> List[dict]:
+        return [p for p in self._proverbs.values() if p['language'] == language]
+
+    def get_all_proverbs(self) -> List[dict]:
+        return list(self._proverbs.values())
+
+@lru_cache()
+def get_proverb_loader() -> ProverbLoader:
+    return ProverbLoader()
+
+logger = get_logger(__name__)
+````
+
+## File: backend/app/models/conversation.py
+````python
+from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, func
+from sqlalchemy.orm import relationship
+from app.db.base import Base
+
+class Conversation(Base):
+    __tablename__ = "conversations"
+
+    id = Column(String, primary_key=True, index=True)  # UUID
+    user_id = Column(String, ForeignKey("profiles.id"), nullable=False, index=True)
+    scenario_id = Column(String, nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    active = Column(Boolean, default=True, nullable=False)
+    
+    # Relationships
+    turns = relationship("Turn", back_populates="conversation", cascade="all, delete-orphan")
+````
+
+## File: backend/app/tts/gemini_provider.py
+````python
+from pydantic_ai import Agent
+from app.core.logging import get_logger
+
+VOICE_MAP = {
+    "yoruba": "Kainene",
+    "hausa": "Aoife",
+    "igbo": "Kainene",
 }
 
-export async function getWisdomDeck() {
-  const response = await apiRequest('/api/v1/game/deck')
-  if (!response.ok) throw new Error('Failed to fetch deck')
-  return response.json()
-}
+async def synthesize_speech(text: str, language: str) -> bytes:
+    from pydantic import BaseModel, Field
+    
+    class AudioResponse(BaseModel):
+        audio_data: bytes = Field(description="The audio data")
+    
+    voice_name = VOICE_MAP.get(language, "Kainene")
+    
+    try:
+        agent = Agent('google-gla:gemini-2.5-flash-preview-tts')
+        
+        result = await agent.run(
+            f"Generate speech for this text in {language}",
+            message_history=[],
+            model_settings={
+                "voice_config": {
+                    "voice_name": voice_name
+                }
+            }
+        )
+        
+        if hasattr(result, 'audio_data'):
+            return result.audio_data
+        return b""
+    except Exception as e:
+        logger.exception("Gemini TTS error: %s", e)
+        return b""
+ 
+logger = get_logger(__name__)
 ````
 
 ## File: frontend/src/pages/DashboardPage.tsx
@@ -4334,7 +3708,7 @@ export default function DashboardPage() {
 ## File: frontend/src/pages/LoginPage.tsx
 ````typescript
 import { useState } from 'react'
-import { useNavigate} from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function LoginPage() {
@@ -4344,7 +3718,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   
-  const { signIn, signUp } = useAuth()
+  const { signIn, signUp, user } = useAuth()
   const navigate = useNavigate()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -4368,72 +3742,84 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            TalkNative
-          </h1>
-          <p className="text-gray-600">
-            Learn Nigerian languages through conversation
-          </p>
-        </div>
+    <div className="min-h-screen bg-naija-paper bg-ankara-pattern">
+      <div className="max-w-5xl mx-auto px-6 py-16">
+        <header className="flex items-center justify-between mb-12">
+          <h1 className="text-2xl font-display font-bold text-naija-dark">TalkNative</h1>
+          <button
+            onClick={() => navigate(user ? '/dashboard' : '/')}
+            className="px-4 py-2 rounded-lg bg-naija-primary text-white font-semibold hover:bg-green-700 transition"
+          >
+            {user ? 'Dashboard' : 'Home'}
+          </button>
+        </header>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="your@email.com"
-            />
+            <h2 className="text-3xl md:text-4xl font-display font-bold text-naija-dark leading-tight mb-4">
+              Sign in or create an account
+            </h2>
+            <p className="text-gray-700 text-lg">
+              Continue your journey and unlock new scenarios and wisdom cards.
+            </p>
           </div>
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="your@email.com"
+                />
+              </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="••••••••"
-            />
-          </div>
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="••••••••"
+                />
+              </div>
 
-          {error && (
-            <div className={`p-4 rounded-lg text-sm ${
-              error.includes('email') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
-            }`}>
-              {error}
+              {error && (
+                <div className={`p-4 rounded-lg text-sm ${
+                  error.includes('email') ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+                }`}>
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-naija-adire text-white py-3 rounded-lg font-semibold hover:opacity-90 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+              >
+                {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
+              </button>
+            </form>
+            <div className="mt-6 text-center">
+              <button
+                onClick={() => setIsSignUp(!isSignUp)}
+                className="text-naija-adire hover:opacity-80 font-medium"
+              >
+                {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+              </button>
             </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
-          >
-            {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-blue-600 hover:text-blue-700 font-medium"
-          >
-            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-          </button>
+          </div>
         </div>
       </div>
     </div>
@@ -4441,996 +3827,74 @@ export default function LoginPage() {
 }
 ````
 
-## File: frontend/src/vite-env.d.ts
+## File: frontend/src/pages/WisdomDeckPage.tsx
 ````typescript
-/// <reference types="vite/client" />
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { getWisdomDeck, getUserProfile } from '../lib/api'
 
-interface ImportMetaEnv {
-  readonly VITE_API_BASE_URL: string
-  readonly VITE_SUPABASE_URL: string
-  readonly VITE_SUPABASE_ANON_KEY: string
-}
-
-interface ImportMeta {
-  readonly env: ImportMetaEnv
-}
-````
-
-## File: frontend/.gitignore
-````
-node_modules
-dist
-*.log
-.env
-.DS_Store
-````
-
-## File: frontend/index.html
-````html
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TalkNative - Language Learning</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
-````
-
-## File: frontend/tsconfig.node.json
-````json
-{
-  "compilerOptions": {
-    "composite": true,
-    "skipLibCheck": true,
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true
-  },
-  "include": ["vite.config.ts"]
-}
-````
-
-## File: backend/alembic/versions/002_phase2_schema.py
-````python
-"""Phase 2: Add users, update conversations and turns
-
-Revision ID: 002
-Revises: 001
-Create Date: 2025-11-29
-
-"""
-from alembic import op
-import sqlalchemy as sa
-
-revision = '002'
-down_revision = '001'
-branch_labels = None
-depends_on = None
-
-
-def upgrade() -> None:
-    # Create profiles table (not 'users' to avoid conflict with Supabase auth.users)
-    op.create_table('profiles',
-        sa.Column('id', sa.String(), nullable=False),
-        sa.Column('email', sa.String(), nullable=False),
-        sa.Column('target_language', sa.Enum('yoruba', 'hausa', 'igbo', name='languageenum'), nullable=True),
-        sa.Column('proficiency_level', sa.Enum('beginner', 'intermediate', 'advanced', name='proficiencyenum'), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_profiles_id'), 'profiles', ['id'], unique=False)
-    op.create_index(op.f('ix_profiles_email'), 'profiles', ['email'], unique=True)
-    
-    # Drop old conversations table and recreate with new schema
-    op.drop_index('ix_conversations_id', table_name='conversations')
-    op.drop_table('turns')  # Drop turns first due to FK
-    op.drop_table('conversations')
-    
-    # Create new conversations table
-    op.create_table('conversations',
-        sa.Column('id', sa.String(), nullable=False),
-        sa.Column('user_id', sa.String(), nullable=False),
-        sa.Column('scenario_id', sa.String(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('active', sa.Boolean(), nullable=False, server_default='true'),
-        sa.ForeignKeyConstraint(['user_id'], ['profiles.id'], ),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_conversations_id'), 'conversations', ['id'], unique=False)
-    op.create_index(op.f('ix_conversations_user_id'), 'conversations', ['user_id'], unique=False)
-    op.create_index(op.f('ix_conversations_scenario_id'), 'conversations', ['scenario_id'], unique=False)
-    
-    # Create new turns table
-    op.create_table('turns',
-        sa.Column('id', sa.Integer(), nullable=False, autoincrement=True),
-        sa.Column('conversation_id', sa.String(), nullable=False),
-        sa.Column('turn_number', sa.Integer(), nullable=False),
-        sa.Column('user_audio_url', sa.String(), nullable=True),
-        sa.Column('user_transcription', sa.Text(), nullable=False),
-        sa.Column('ai_response_text', sa.Text(), nullable=False),
-        sa.Column('ai_response_text_english', sa.Text(), nullable=True),
-        sa.Column('ai_response_audio_url', sa.String(), nullable=True),
-        sa.Column('grammar_correction', sa.Text(), nullable=True),
-        sa.Column('grammar_score', sa.Integer(), nullable=True),
-        sa.ForeignKeyConstraint(['conversation_id'], ['conversations.id'], ),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_turns_id'), 'turns', ['id'], unique=False)
-    op.create_index(op.f('ix_turns_conversation_id'), 'turns', ['conversation_id'], unique=False)
-
-
-def downgrade() -> None:
-    # Drop new tables
-    op.drop_index(op.f('ix_turns_conversation_id'), table_name='turns')
-    op.drop_index(op.f('ix_turns_id'), table_name='turns')
-    op.drop_table('turns')
-    
-    op.drop_index(op.f('ix_conversations_scenario_id'), table_name='conversations')
-    op.drop_index(op.f('ix_conversations_user_id'), table_name='conversations')
-    op.drop_index(op.f('ix_conversations_id'), table_name='conversations')
-    op.drop_table('conversations')
-    
-    op.drop_index(op.f('ix_profiles_email'), table_name='profiles')
-    op.drop_index(op.f('ix_profiles_id'), table_name='profiles')
-    op.drop_table('profiles')
-    
-    # Recreate old schema (simplified version)
-    op.create_table('conversations',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('language', sa.String(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index(op.f('ix_conversations_id'), 'conversations', ['id'], unique=False)
-````
-
-## File: backend/app/ai/agent.py
-````python
-from pydantic import BaseModel, Field
-from pydantic_ai import Agent
-from app.core.config import settings
-
-class ConversationTurn(BaseModel):
-    user_transcription: str = Field(description="Exact transcription of what the user said")
-    grammar_is_correct: bool = Field(description="True if the user's grammar was perfect")
-    correction_feedback: str | None = Field(description="English feedback if grammar was wrong")
-    reply_text_local: str = Field(description="The response in Igbo/Hausa/Yoruba")
-    reply_text_english: str = Field(description="English translation of the response")
-    sentiment_score: float = Field(description="My emotional reaction to the user's input, from -1.0 (impatient/angry) to 1.0 (very pleased/encouraging).")
-    current_price: int | None = Field(description="For market scenarios only: the current price offered by the seller. If not a market scenario return null.")
-    reply_text_local: str = Field(description="The response. if cultural_flag is True, this hsould be an angry/shocked reaction.")
-    cultural_flag: bool = Field(description="Set to True if user was culturally rude (e.g. greeting elder casually, refusing food rudely).")
-    cultural_feedback: str | None = Field(description="If flag is True, explain the cultural mistake (e.g 'You must kneel for elders'). ")
-
-SYSTEM_PROMPTS = {
-    "yoruba": (
-        "You are a native Yoruba language tutor helping learners master this tonal language. "
-        "FOCUS AREAS: "
-        "- Tone accuracy (high/mid/low tones) - tones change word meanings "
-        "- Proper use of vowel harmony (oral vs nasal vowels) "
-        "- Culturally appropriate greetings based on time/context "
-        "- Correct verb serialization patterns "
-        "\n"
-        "COMMON LEARNER MISTAKES: "
-        "- Incorrect tone patterns (e.g., 'ọmọ' child vs 'ọmọ́' offspring) "
-        "- Missing or wrong diacritics "
-        "- Improper verb ordering in serial constructions "
-        "- Wrong vowel harmony in compound words "
-        "\n"
-        "You will receive audio from a learner speaking Yoruba. "
-        "1. Transcribe EXACTLY what they said with proper tone marks (á, à, ā, é, è, etc.) "
-        "2. If they made mistakes, explain briefly in English focusing on tones, vowels, or grammar "
-        "3. Continue the conversation naturally in Yoruba, demonstrating correct usage "
-        "4. Use appropriate cultural expressions and greetings "
-        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if they are rude, my score will be negative)."
-    ),
-    "hausa": (
-        "You are a native Hausa language tutor helping learners master this important West African language. "
-        "FOCUS AREAS: "
-        "- Grammatical gender (masculine/feminine) and agreement "
-        "- Grade system (verb modifications showing direction/voice) "
-        "- Proper use of aspect markers (continuative, completive, future) "
-        "- Correct usage of pronouns and possessives "
-        "\n"
-        "COMMON LEARNER MISTAKES: "
-        "- Gender agreement errors (adjectives/verbs not matching noun gender) "
-        "- Grade confusion (using wrong verb grade for context) "
-        "- Aspect marker misuse (na/ina/za confusion) "
-        "- Incorrect pronoun forms for gender "
-        "\n"
-        "You will receive audio from a learner speaking Hausa. "
-        "1. Transcribe EXACTLY what they said (use proper Hausa orthography) "
-        "2. If they made mistakes, explain briefly in English focusing on gender, grades, or aspects "
-        "3. Continue the conversation naturally in Hausa, demonstrating correct usage "
-        "4. Use culturally appropriate Islamic greetings when relevant (Salam alaikum, etc.)"
-        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if they are polite, my score will be positive)."
-    ),
-    "igbo": (
-        "You are a native Igbo language tutor helping learners master this complex tonal language. "
-        "FOCUS AREAS: "
-        "- Tone patterns (high/low/downstep) - crucial for meaning "
-        "- Vowel harmony rules (must follow throughout words) "
-        "- Serial verb constructions (multiple verbs in sequence) "
-        "- Proper use of noun class prefixes "
-        "\n"
-        "COMMON LEARNER MISTAKES: "
-        "- Tone errors causing meaning changes "
-        "- Vowel harmony violations (mixing incompatible vowels) "
-        "- Wrong verb ordering in serial constructions "
-        "- Incorrect or missing noun class markers "
-        "- Improper use of stative verbs "
-        "\n"
-        "You will receive audio from a learner speaking Igbo. "
-        "1. Transcribe EXACTLY what they said with proper tone marks (á, à, ọ́, ọ̀, etc.) "
-        "2. If they made mistakes, explain briefly in English focusing on tones, vowel harmony, or verb patterns "
-        "3. Continue the conversation naturally in Igbo, demonstrating correct usage "
-        "4. Use community-oriented expressions and appropriate proverbs when relevant"
-        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if their grammar is very poor, my score will be low)."
-    )
-}
-
-def get_agent(language: str) -> Agent:
-    system_prompt = SYSTEM_PROMPTS.get(language, SYSTEM_PROMPTS["yoruba"])
-    
-    return Agent(
-        'google-gla:gemini-2.5-flash',
-        output_type=ConversationTurn,
-        system_prompt=system_prompt,
-    )
-
-# Backward compatibility: default agent for Yoruba
-agent = get_agent("yoruba")
-````
-
-## File: backend/app/models/conversation.py
-````python
-from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, func
-from sqlalchemy.orm import relationship
-from app.db.base import Base
-
-class Conversation(Base):
-    __tablename__ = "conversations"
-
-    id = Column(String, primary_key=True, index=True)  # UUID
-    user_id = Column(String, ForeignKey("profiles.id"), nullable=False, index=True)
-    scenario_id = Column(String, nullable=False, index=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    active = Column(Boolean, default=True, nullable=False)
-    
-    # Relationships
-    turns = relationship("Turn", back_populates="conversation", cascade="all, delete-orphan")
-````
-
-## File: backend/app/models/schemas.py
-````python
-from pydantic import BaseModel, EmailStr
-from typing import Optional, Literal
-from datetime import datetime
-
-# Enums
-LanguageType = Literal["yoruba", "hausa", "igbo"]
-ProficiencyType = Literal["beginner", "intermediate", "advanced"]
-DifficultyType = Literal["beginner", "intermediate", "advanced"]
-
-# User schemas
-class UserProfileUpdate(BaseModel):
-    target_language: LanguageType
-    proficiency_level: ProficiencyType
-
-class UserProfileResponse(BaseModel):
-    id: str
-    email: str
-    target_language: Optional[LanguageType]
-    proficiency_level: Optional[ProficiencyType]
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-# Scenario schemas
-class ScenarioRoles(BaseModel):
-    user: str
-    ai: str
-
-class ScenarioMission(BaseModel):
-    objective: str
-    success_condition: str
-
-class KeyVocabulary(BaseModel):
-    word: str
-    meaning: str
-
-class HaggleSettings(BaseModel):
-    start_price: int
-    target_price: int
-    reserve_price: int
-
-class ScenarioResponse(BaseModel):
-    id: str
-    language: LanguageType
-    category: Optional[str] = None
-    title: str
-    difficulty: DifficultyType
-    description: Optional[str] = None
-    roles: Optional[ScenarioRoles] = None
-    mission: Optional[ScenarioMission] = None
-    key_vocabulary: Optional[list[KeyVocabulary]] = None
-    system_prompt_context: Optional[str] = None
-    haggle_settings: Optional[HaggleSettings] = None
-
-# Conversation schemas
-class ConversationStartRequest(BaseModel):
-    scenario_id: str
-
-class ConversationStartResponse(BaseModel):
-    conversation_id: str
-    initial_ai_greeting: Optional[str] = None
-    initial_ai_audio_url: Optional[str] = None
-
-# Turn schemas
-class TurnResponse(BaseModel):
-    turn_number: int
-    transcription: str
-    ai_text: str
-    ai_text_english: Optional[str]
-    ai_audio_url: str
-    correction: Optional[str]
-    grammar_score: Optional[int]
-    sentiment_score: Optional[float] = None
-    negotiated_price: Optional[int] = None
-
-# Conversation history schemas
-class ConversationHistoryResponse(BaseModel):
-    conversation_id: str
-    scenario_title: str
-    scenario_id: str
-    created_at: datetime
-    turn_count: int
-    last_message: Optional[str]
-    active: bool
-
-# Vocabulary schemas
-class SaveWordRequest(BaseModel):
-    word: str
-    translation: str
-    context_sentence: Optional[str] = None
-
-class SavedWordResponse(BaseModel):
-    id: int
-    word: str
-    translation: str
-    context_sentence: Optional[str]
-    language: LanguageType
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-````
-
-## File: backend/app/models/turn.py
-````python
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float
-from sqlalchemy.orm import relationship
-from app.db.base import Base
-
-class Turn(Base):
-    __tablename__ = "turns"
-
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False, index=True)
-    turn_number = Column(Integer, nullable=False)
-    
-    # User input
-    user_audio_url = Column(String, nullable=True)
-    user_transcription = Column(Text, nullable=False)
-    
-    # AI response
-    ai_response_text = Column(Text, nullable=False)
-    ai_response_text_english = Column(Text, nullable=True)  # English translation
-    ai_response_audio_url = Column(String, nullable=True)
-    
-    # Grammar feedback
-    grammar_correction = Column(Text, nullable=True)
-    grammar_score = Column(Integer, nullable=True)  # 0-10 scale
-    
-    
-    sentiment_score = Column(Float, nullable=True)
-    negotiated_price = Column(Integer, nullable=True)
-    
-    # Relationships
-    conversation = relationship("Conversation", back_populates="turns")
-````
-
-## File: backend/app/main.py
-````python
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
-from app.api.v1.chat import router as chat_router
-from app.api.v1.users import router as users_router
-from app.api.v1.scenarios import router as scenarios_router
-from app.api.v1.conversations import router as conversations_router
-from app.api.v1.vocabulary import router as vocabulary_router
-from app.api.v1.game import router as game_router
-
-app = FastAPI(title="TalkNative API", version="2.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ALLOW_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-@app.get("/healthz")
-def healthz():
-    return {"ok": True}
-
-# V1 API routes
-app.include_router(chat_router, prefix="/api/v1", tags=["chat-legacy"])
-app.include_router(users_router, prefix="/api/v1/user")
-app.include_router(scenarios_router, prefix="/api/v1/scenarios")
-app.include_router(conversations_router, prefix="/api/v1/chat")
-app.include_router(vocabulary_router, prefix="/api/v1/vocabulary")
-app.include_router(game_router, prefix="/api/v1/game")
-````
-
-## File: frontend/src/pages/ChatPage.tsx
-````typescript
-import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
-import { useReactMediaRecorder } from 'react-media-recorder'
-import { sendTurn, getConversationTurns, saveWord, getScenarioById, Scenario, TurnResponse, finishScenario } from '../lib/api'
-import PatienceMeter from '../components/PatienceMeter'
-import HaggleTicker from '../components/HaggleTicker'
-import CulturalAlert from '../components/CulturalAlert'
-import ProverbCard from '../components/ProverbCard'
-
-interface Turn {
-  turn_number: number
-  transcription: string
-  ai_text: string
-  ai_text_english: string | null
-  ai_audio_url: string
-  correction: string | null
-  grammar_score: number | null
-  user_audio_url?: string
-  sentiment_score: number | null
-  negotiated_price: number | null
-}
-
-export default function ChatPage() {
-  const { id: conversationId } = useParams<{ id: string }>()
-  const navigate = useNavigate()
-  const location = useLocation()
-  
-  // Data State
-  const [scenario, setScenario] = useState<Scenario | null>(null)
-  const [turns, setTurns] = useState<Turn[]>([])
-  
-  // UI State
-  const [loading, setLoading] = useState(false)
-  const [loadingHistory, setLoadingHistory] = useState(true)
-  const [processingStage, setProcessingStage] = useState<string | null>(null)
+export default function WisdomDeckPage() {
+  const [cards, setCards] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [audioPlaying, setAudioPlaying] = useState(false)
-  const [playingTurnNumber, setPlayingTurnNumber] = useState<number | null>(null)
-  const [showTranslation, setShowTranslation] = useState<{[key: number]: boolean}>({})
-  const [showCorrection, setShowCorrection] = useState<{[key: number]: boolean}>({})
-  const [savingWord, setSavingWord] = useState<{[key: number]: boolean}>({})
-  const [showHints, setShowHints] = useState(false)
+  const navigate = useNavigate()
 
-  // Gamification State
-  const [patience, setPatience] = useState(100)
-  const [currentPrice, setCurrentPrice] = useState<number | null>(null)
-  const [lastSentiment, setLastSentiment] = useState<number | null>(null)
-  const [gameStatus, setGameStatus] = useState<'active' | 'won' | 'lost'>('active')
-  const [culturalFeedback, setCulturalFeedback] = useState<string | null>(null)
-  const [wonLoot, setWonLoot] = useState<any | null>(null)
-  
-  // Refs
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const audioElementRef = useRef<HTMLAudioElement | null>(null)
-
-  const { status, startRecording, stopRecording, mediaBlobUrl, clearBlobUrl } = useReactMediaRecorder({ 
-    audio: true 
-  })
-
-  // 1. Load conversation history and scenario on mount
   useEffect(() => {
-    const loadData = async () => {
-      if (!conversationId) return
-      
-      try {
-        setLoadingHistory(true)
-        const history = await getConversationTurns(conversationId)
-        // Cast the response to include gamification fields if they come from DB
-        setTurns(history as Turn[])
-        
-        // Try to get scenario from location state or fetch it based on history/ID
-        const stateScenarioId = (location.state as any)?.scenarioId
-        
-        if (stateScenarioId) {
-          const scenarioData = await getScenarioById(stateScenarioId)
-          setScenario(scenarioData)
-        } else {
-          // If we reloaded page, we might need a way to fetch scenario ID from the conversation
-          // For MVP, we might rely on the user coming from dashboard, or add scenario_id to TurnResponse
-          // This part assumes we can retrieve it or it was passed
-        }
-      } catch (err: any) {
-        console.error('Failed to load history:', err)
-        setError('Failed to load conversation history')
-      } finally {
-        setLoadingHistory(false)
+    getUserProfile().then((profile) => {
+      if (!profile.target_language || !profile.proficiency_level) {
+        navigate('/onboarding', { replace: true })
       }
-    }
-    
-    loadData()
-  }, [conversationId, location.state])
-
-  // 2. Initialize Gamification Settings when Scenario Loads
-  useEffect(() => {
-    if (scenario?.haggle_settings) {
-      setCurrentPrice(scenario.haggle_settings.start_price)
-    }
-  }, [scenario])
-
-  // 3. Patience Timer Logic
-  useEffect(() => {
-    if (gameStatus !== 'active') return
-
-    const timer = setInterval(() => {
-      setPatience(prev => {
-        // Drain slower if recording (user is active), faster if idle
-        const drain = status === 'recording' ? 0.2 : 0.5 
-        const next = Math.max(0, prev - drain)
-        
-        if (next === 0) {
-          setGameStatus('lost')
-          clearInterval(timer)
-        }
-        return next
-      })
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [status, gameStatus])
-
-  // 4. Handle AI Response updates (Gamification Logic)
-  const handleTurnResponse = (response: TurnResponse) => {
-    // Update Sentiment / Patience
-    if (response.sentiment_score !== null && response.sentiment_score !== undefined) {
-      setLastSentiment(response.sentiment_score)
-      setPatience(prev => {
-        // Sentiment -1.0 removes 15%, +1.0 adds 5%
-        // If negative, damage is high. If positive, healing is small.
-        const impact = response.sentiment_score! * (response.sentiment_score! < 0 ? 15 : 5)
-        return Math.min(100, Math.max(0, prev + impact))
-      })
-    }
-
-    // Update Price (For Market Scenarios)
-    if (response.negotiated_price !== null && response.negotiated_price !== undefined) {
-      setCurrentPrice(response.negotiated_price)
-
-    if (response.cultural_flag) {
-        setCulturalFeedback(response.cultural_feedback) // Triggers Alert
-        // Optional: Damage patience heavily
-        setPatience(prev => Math.max(0, prev - 30))
-    }
-      
-      // Check Win Condition
-      if (scenario?.haggle_settings && response.negotiated_price <= scenario.haggle_settings.target_price) {
-        setGameStatus('won')
-      }
-    }
-  }
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => {
-    if (gameStatus === 'won' && scenario) {
-        // Calculate stars based on patience left
-        const stars = patience > 80 ? 3 : patience > 50 ? 2 : 1
-        
-        finishScenario(scenario.id, stars).then(res => {
-            if (res.loot) {
-                setWonLoot(res.loot) // Triggers ProverbCard
-            }
-        })
-    }
-}, [gameStatus])
-
-
-  // Scroll to bottom helper
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [turns])
-
-  // Audio Playback
-  const playAudio = (url: string, turnNumber: number) => {
-    if (audioElementRef.current) {
-      audioElementRef.current.pause()
-    }
-
-    const audio = new Audio(url)
-    audioElementRef.current = audio
-    setAudioPlaying(true)
-    setPlayingTurnNumber(turnNumber)
-
-    audio.onended = () => {
-      setAudioPlaying(false)
-      setPlayingTurnNumber(null)
-    }
-
-    audio.onerror = () => {
-      setAudioPlaying(false)
-      setPlayingTurnNumber(null)
-      setError('Failed to play audio')
-    }
-
-    audio.play().catch((err) => {
-      setAudioPlaying(false)
-      setPlayingTurnNumber(null)
-      setError('Audio playback failed: ' + err.message)
-    })
-  }
-
-  // Send Audio Handler
-  const sendAudio = async () => {
-    if (!mediaBlobUrl || !conversationId || gameStatus !== 'active') return
-
     setLoading(true)
     setError(null)
-
-    try {
-      setProcessingStage("Uploading audio...")
-      const blob = await fetch(mediaBlobUrl).then((r) => r.blob())
-      
-      setProcessingStage("Processing your speech...")
-      const response = await sendTurn(conversationId, blob)
-      
-      setProcessingStage("Generating response...")
-      
-      // Cast response to include gamification fields
-      const fullResponse = response as Turn
-      
-      setTurns(prev => [...prev, fullResponse])
-      handleTurnResponse(response)
-      
-      // Auto-play AI response
-      if (response.ai_audio_url) {
-        playAudio(response.ai_audio_url, response.turn_number)
-      }
-      
-      clearBlobUrl()
-    } catch (err: any) {
-      setError(err.message || 'Failed to send audio')
-    } finally {
-      setLoading(false)
-      setProcessingStage(null)
-    }
-  }
-
-  // Toggles
-  const toggleTranslation = (turnNumber: number) => {
-    setShowTranslation(prev => ({
-      ...prev,
-      [turnNumber]: !prev[turnNumber]
-    }))
-  }
-
-  const toggleCorrection = (turnNumber: number) => {
-    setShowCorrection(prev => ({
-      ...prev,
-      [turnNumber]: !prev[turnNumber]
-    }))
-  }
-
-  // Save Word Handler
-  const handleSaveWord = async (turn: Turn) => {
-    if (!turn.ai_text_english) return
-    
-    setSavingWord(prev => ({ ...prev, [turn.turn_number]: true }))
-    
-    try {
-      await saveWord(
-        turn.ai_text,
-        turn.ai_text_english,
-        turn.ai_text
-      )
-      alert('Word saved to vocabulary!')
-    } catch (err: any) {
-      if (err.message.includes('already saved')) {
-        alert('This phrase is already in your vocabulary')
-      } else {
-        alert('Failed to save word: ' + err.message)
-      }
-    } finally {
-      setSavingWord(prev => ({ ...prev, [turn.turn_number]: false }))
-    }
-  }
-
-  if (loadingHistory) {
-    return (
-      <div className="flex flex-col h-screen bg-gray-50 items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading conversation...</p>
-        </div>
-      </div>
-    )
-  }
+    getWisdomDeck()
+      .then(setCards)
+      .catch((e: any) => setError(e?.message || 'Failed to load deck'))
+      .finally(() => setLoading(false))
+  }, [])
 
   return (
-    <>
-    <CulturalAlert feedback={culturalFeedback} />
-    {wonLoot && <ProverbCard proverb={wonLoot} onClose={() => setWonLoot(null)} />}
-    <div className="flex flex-col h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="text-blue-600 hover:text-blue-700 font-medium"
-          >
-            ← Back to Dashboard
-          </button>
-          <div className="text-center">
-            <h1 className="text-lg font-semibold text-gray-900">
-              {scenario?.title || 'Conversation'}
-            </h1>
-            {scenario?.mission && (
-              <p className="text-xs text-gray-500 mt-1">🎯 {scenario.mission.objective}</p>
-            )}
-          </div>
-          <button
-            onClick={() => setShowHints(!showHints)}
-            className="text-purple-600 hover:text-purple-700 font-medium text-sm px-3 py-1 rounded-lg hover:bg-purple-50 transition"
-          >
-            💡 {showHints ? 'Hide' : 'Hints'}
-          </button>
-        </div>
+    <div className="min-h-screen bg-gray-900 p-8 text-white">
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-serif text-yellow-500">Ancient Wisdom</h1>
+        <button onClick={() => navigate('/dashboard')} className="text-gray-400">Back</button>
       </div>
 
-      {/* GAMIFICATION HUD */}
-      <div className="bg-white border-b border-gray-200 px-4 pt-4 pb-2 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-4xl mx-auto">
-          
-          {/* Status Messages */}
-          {gameStatus === 'lost' && (
-            <div className="bg-red-600 text-white p-3 rounded-lg text-center mb-4 font-bold animate-pulse">
-              💔 SESSION FAILED: The seller lost patience!
-            </div>
-          )}
-          {gameStatus === 'won' && (
-            <div className="bg-green-600 text-white p-3 rounded-lg text-center mb-4 font-bold animate-bounce">
-              🏆 SUCCESS: You got the deal!
-            </div>
-          )}
+      {loading && (
+        <div className="flex items-center justify-center h-40 text-gray-400">Loading deck...</div>
+      )}
 
-          {/* Patience Meter (Always visible) */}
-          <PatienceMeter 
-            level={patience} 
-            sentiment={lastSentiment} 
-            isRecording={status === 'recording'}
-          />
+      {!loading && error && (
+        <div className="bg-red-800 text-red-100 p-4 rounded-lg">{error}</div>
+      )}
 
-          {/* Haggle Ticker (Only for Market Scenarios) */}
-          {scenario?.category === 'Market' && scenario.haggle_settings && currentPrice !== null && (
-            <HaggleTicker
-              currentPrice={currentPrice}
-              startPrice={scenario.haggle_settings.start_price}
-              targetPrice={scenario.haggle_settings.target_price}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Hints Panel */}
-      {showHints && scenario?.key_vocabulary && scenario.key_vocabulary.length > 0 && (
-        <div className="bg-purple-50 border-b border-purple-200 animate-in slide-in-from-top duration-300">
-          <div className="max-w-4xl mx-auto px-4 py-4">
-            <h3 className="font-semibold text-purple-900 mb-3">📚 Key Vocabulary</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {scenario.key_vocabulary.map((vocab, index) => (
-                <div key={index} className="bg-white rounded-lg px-3 py-2 flex justify-between items-center shadow-sm">
-                  <span className="font-medium text-gray-900">{vocab.word}</span>
-                  <span className="text-gray-600 text-sm">{vocab.meaning}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+      {!loading && !error && cards.length === 0 && (
+        <div className="max-w-xl mx-auto text-center bg-gray-800 border border-gray-700 p-8 rounded-2xl">
+          <div className="text-4xl mb-2">🃏</div>
+          <div className="text-yellow-400 font-bold text-lg mb-1">No wisdom cards yet</div>
+          <p className="text-gray-300 mb-4">Finish scenarios with at least 2 stars to earn proverbs.</p>
+          <button onClick={() => navigate('/dashboard')} className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold px-4 py-2 rounded-lg">Find a scenario</button>
         </div>
       )}
 
-      {/* Chat messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
-        <div className="max-w-4xl mx-auto space-y-6">
-          {turns.map((turn) => (
-            <div key={turn.turn_number} className="space-y-4">
-              {/* User message */}
-              <div className="flex justify-end">
-                <div className="max-w-[85%] sm:max-w-[70%]">
-                  <div className="bg-blue-600 text-white rounded-2xl rounded-tr-sm px-4 py-3 shadow-md">
-                    <p className="text-sm">{turn.transcription}</p>
-                  </div>
-                  {turn.correction && turn.grammar_score && turn.grammar_score < 8 && (
-                    <div className="mt-2 flex flex-col items-end">
-                      <button
-                        onClick={() => toggleCorrection(turn.turn_number)}
-                        className="text-xs text-amber-600 hover:text-amber-700 font-medium flex items-center bg-amber-50 px-2 py-1 rounded-md"
-                      >
-                        ✨ Grammar feedback
-                      </button>
-                      {showCorrection[turn.turn_number] && (
-                        <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-900 w-full animate-in fade-in">
-                          {turn.correction}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* AI message */}
-              <div className="flex justify-start">
-                <div className="max-w-[85%] sm:max-w-[70%]">
-                  <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
-                    <div className="flex items-center gap-2 mb-2">
-                      {audioPlaying && playingTurnNumber === turn.turn_number && (
-                        <span className="text-xs text-blue-600 animate-pulse font-semibold">🔊 Speaking...</span>
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-900 leading-relaxed">{turn.ai_text}</p>
-                    <div className="mt-3 flex items-center gap-2 flex-wrap border-t border-gray-100 pt-2">
-                      <button
-                        onClick={() => playAudio(turn.ai_audio_url, turn.turn_number)}
-                        disabled={audioPlaying && playingTurnNumber === turn.turn_number}
-                        className="text-xs bg-blue-50 text-blue-600 px-3 py-1.5 rounded-full hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-                      >
-                        {audioPlaying && playingTurnNumber === turn.turn_number ? '⏸ Playing...' : '🔊 Replay'}
-                      </button>
-                      <button
-                        onClick={() => toggleTranslation(turn.turn_number)}
-                        className="text-xs bg-gray-50 text-gray-600 px-3 py-1.5 rounded-full hover:bg-gray-100 font-medium transition-colors"
-                      >
-                        {showTranslation[turn.turn_number] ? 'Hide translation' : '🌐 Translation'}
-                      </button>
-                      {turn.ai_text_english && (
-                        <button
-                          onClick={() => handleSaveWord(turn)}
-                          disabled={savingWord[turn.turn_number]}
-                          className="text-xs bg-purple-50 text-purple-600 px-3 py-1.5 rounded-full hover:bg-purple-100 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
-                        >
-                          {savingWord[turn.turn_number] ? 'Saving...' : '📚 Save'}
-                        </button>
-                      )}
-                    </div>
-                    {showTranslation[turn.turn_number] && turn.ai_text_english && (
-                      <div className="mt-2 text-xs text-gray-600 italic bg-gray-50 p-2 rounded-md animate-in fade-in">
-                        <span className="font-medium text-gray-500">Meaning:</span> {turn.ai_text_english}
-                      </div>
-                    )}
-                  </div>
-                  {turn.grammar_score === 10 && (
-                    <div className="mt-1 text-xs text-green-600 flex items-center gap-1 font-medium px-2">
-                      ✓ Perfect grammar!
-                    </div>
-                  )}
-                </div>
+      {!loading && !error && cards.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+          {cards.map((card) => (
+            <div key={card.id} className="bg-gray-800 border border-gray-700 p-6 rounded-xl">
+              <div className="text-xs uppercase tracking-widest text-gray-500 mb-2">{card.rarity}</div>
+              <h3 className="text-xl font-bold mb-2 text-yellow-100">{card.content}</h3>
+              <p className="text-sm italic text-gray-400 mb-4">"{card.literal_translation}"</p>
+              <div className="bg-black/30 p-3 rounded">
+                <p className="text-sm text-gray-300">{card.meaning}</p>
               </div>
             </div>
           ))}
-          
-          {/* Processing indicator (thinking bubble) */}
-          {processingStage && (
-            <div className="flex justify-start">
-              <div className="max-w-[70%]">
-                <div className="bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                      <div className="w-2 h-2 bg-blue-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                    </div>
-                    <span className="text-sm text-gray-600 font-medium animate-pulse">{processingStage}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          <div ref={messagesEndRef} />
         </div>
-      </div>
-
-      {/* Input area */}
-      <div className={`bg-white border-t border-gray-200 px-4 py-4 ${gameStatus !== 'active' ? 'opacity-50 pointer-events-none grayscale' : ''}`}>
-        <div className="max-w-4xl mx-auto">
-          {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 text-red-800 text-sm flex items-center justify-between">
-              <span>{error}</span>
-              <button onClick={() => setError(null)} className="text-red-600 font-bold">✕</button>
-            </div>
-          )}
-
-          <div className="flex items-center gap-3">
-            {/* Recording status with visualizer */}
-            <div className="flex-1 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200 shadow-inner">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">
-                  Status: <span className={status === 'recording' ? 'text-red-600 font-bold' : 'text-gray-600'}>{status === 'recording' ? 'Recording...' : 'Ready'}</span>
-                </span>
-                {status === 'recording' && (
-                  <span className="flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-3 w-3 rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-                  </span>
-                )}
-              </div>
-              {/* Audio visualizer bars */}
-              {status === 'recording' ? (
-                <div className="flex items-center justify-center gap-1 h-8">
-                  {[...Array(12)].map((_, i) => (
-                    <div
-                      key={i}
-                      className="w-1.5 bg-gradient-to-t from-red-500 to-red-400 rounded-full"
-                      style={{
-                        height: '100%',
-                        animation: `pulse ${0.5 + Math.random() * 0.5}s ease-in-out infinite`,
-                        animationDelay: `${i * 0.05}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center gap-1 h-8 opacity-20">
-                   {[...Array(12)].map((_, i) => (
-                    <div key={i} className="w-1.5 bg-gray-400 rounded-full h-1" />
-                   ))}
-                </div>
-              )}
-            </div>
-
-            {/* Control buttons */}
-            <button
-              onClick={startRecording}
-              disabled={status === 'recording' || loading}
-              className="bg-green-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-md active:transform active:scale-95 flex items-center gap-2"
-            >
-              🎤 Record
-            </button>
-            
-            <button
-              onClick={stopRecording}
-              disabled={status !== 'recording'}
-              className="bg-red-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-md active:transform active:scale-95"
-            >
-              ⏹ Stop
-            </button>
-            
-            <button
-              onClick={sendAudio}
-              disabled={!mediaBlobUrl || loading}
-              className="bg-blue-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-all shadow-md active:transform active:scale-95 flex items-center gap-2"
-            >
-              {loading ? '⏳ Sending...' : '📤 Send'}
-            </button>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
-    </>
   )
 }
 ````
@@ -5490,6 +3954,54 @@ export default function App() {
     </Routes>
   )
 }
+````
+
+## File: frontend/Dockerfile
+````
+FROM node:20-alpine AS build
+WORKDIR /app
+
+# Accept Vite build-time environment variables
+ARG VITE_API_BASE_URL
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+
+# Expose them to the build process so Vite can inline them
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
+ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+
+COPY package*.json ./
+RUN npm i
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 8080
+CMD ["nginx", "-g", "daemon off;"]
+````
+
+## File: frontend/index.html
+````html
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TalkNative - Language Learning</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@400;500;600;700&family=Outfit:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
 ````
 
 ## File: frontend/tsconfig.json
@@ -5622,52 +4134,325 @@ services:
       - backend
 ````
 
-## File: frontend/src/App.tsx
-````typescript
-import { Routes, Route, Navigate } from 'react-router-dom'
-import LoginPage from './pages/LoginPage'
-import OnboardingPage from './pages/OnboardingPage'
-import DashboardPage from './pages/DashboardPage'
-import ChatPage from './pages/ChatPage'
-import RequireAuth from './components/RequireAuth'
+## File: backend/app/ai/agent.py
+````python
+from pydantic import BaseModel, Field
+from pydantic_ai import Agent
+from app.core.config import settings
 
-export default function App() {
-  return (
-    <Routes>
-      {/* Public routes */}
-      <Route path="/login" element={<LoginPage />} />
-      
-      {/* Protected routes */}
-      <Route
-        path="/onboarding"
-        element={
-          <RequireAuth>
-            <OnboardingPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/dashboard"
-        element={
-          <RequireAuth>
-            <DashboardPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/chat/:id"
-        element={
-          <RequireAuth>
-            <ChatPage />
-          </RequireAuth>
-        }
-      />
-      
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
-    </Routes>
-  )
+class ConversationTurn(BaseModel):
+    user_transcription: str = Field(description="Exact transcription of what the user said")
+    grammar_is_correct: bool = Field(description="True if the user's grammar was perfect")
+    correction_feedback: str | None = Field(description="English feedback if grammar was wrong")
+    reply_text_local: str = Field(description="The response in Igbo/Hausa/Yoruba")
+    reply_text_english: str = Field(description="English translation of the response")
+    sentiment_score: float = Field(description="My emotional reaction to the user's input, from -1.0 (impatient/angry) to 1.0 (very pleased/encouraging).")
+    current_price: int | None = Field(description="For market scenarios only: the current price offered by the seller. If not a market scenario return null.")
+    reply_text_local: str = Field(description="The response. if cultural_flag is True, this hsould be an angry/shocked reaction.")
+    cultural_flag: bool = Field(description="Set to True if user was culturally rude (e.g. greeting elder casually, refusing food rudely).")
+    cultural_feedback: str | None = Field(description="If flag is True, explain the cultural mistake (e.g 'You must kneel for elders'). ")
+
+SYSTEM_PROMPTS = {
+    "yoruba": (
+        "You are a native Yoruba language tutor helping learners master this tonal language. "
+        "FOCUS AREAS: "
+        "- Tone accuracy (high/mid/low tones) - tones change word meanings "
+        "- Proper use of vowel harmony (oral vs nasal vowels) "
+        "- Culturally appropriate greetings based on time/context "
+        "- Correct verb serialization patterns "
+        "\n"
+        "COMMON LEARNER MISTAKES: "
+        "- Incorrect tone patterns (e.g., 'ọmọ' child vs 'ọmọ́' offspring) "
+        "- Missing or wrong diacritics "
+        "- Improper verb ordering in serial constructions "
+        "- Wrong vowel harmony in compound words "
+        "\n"
+        "You will receive audio from a learner speaking Yoruba. "
+        "1. Transcribe EXACTLY what they said with proper tone marks (á, à, ā, é, è, etc.) "
+        "2. If they made mistakes, explain briefly in English focusing on tones, vowels, or grammar "
+        "3. Continue the conversation naturally in Yoruba, demonstrating correct usage "
+        "4. Use appropriate cultural expressions and greetings "
+        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if they are rude, my score will be negative)."
+    ),
+    "hausa": (
+        "You are a native Hausa language tutor helping learners master this important West African language. "
+        "FOCUS AREAS: "
+        "- Grammatical gender (masculine/feminine) and agreement "
+        "- Grade system (verb modifications showing direction/voice) "
+        "- Proper use of aspect markers (continuative, completive, future) "
+        "- Correct usage of pronouns and possessives "
+        "\n"
+        "COMMON LEARNER MISTAKES: "
+        "- Gender agreement errors (adjectives/verbs not matching noun gender) "
+        "- Grade confusion (using wrong verb grade for context) "
+        "- Aspect marker misuse (na/ina/za confusion) "
+        "- Incorrect pronoun forms for gender "
+        "\n"
+        "You will receive audio from a learner speaking Hausa. "
+        "1. Transcribe EXACTLY what they said (use proper Hausa orthography) "
+        "2. If they made mistakes, explain briefly in English focusing on gender, grades, or aspects "
+        "3. Continue the conversation naturally in Hausa, demonstrating correct usage "
+        "4. Use culturally appropriate Islamic greetings when relevant (Salam alaikum, etc.)"
+        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if they are polite, my score will be positive)."
+    ),
+    "igbo": (
+        "You are a native Igbo language tutor helping learners master this complex tonal language. "
+        "FOCUS AREAS: "
+        "- Tone patterns (high/low/downstep) - crucial for meaning "
+        "- Vowel harmony rules (must follow throughout words) "
+        "- Serial verb constructions (multiple verbs in sequence) "
+        "- Proper use of noun class prefixes "
+        "\n"
+        "COMMON LEARNER MISTAKES: "
+        "- Tone errors causing meaning changes "
+        "- Vowel harmony violations (mixing incompatible vowels) "
+        "- Wrong verb ordering in serial constructions "
+        "- Incorrect or missing noun class markers "
+        "- Improper use of stative verbs "
+        "\n"
+        "You will receive audio from a learner speaking Igbo. "
+        "1. Transcribe EXACTLY what they said with proper tone marks (á, à, ọ́, ọ̀, etc.) "
+        "2. If they made mistakes, explain briefly in English focusing on tones, vowel harmony, or verb patterns "
+        "3. Continue the conversation naturally in Igbo, demonstrating correct usage "
+        "4. Use community-oriented expressions and appropriate proverbs when relevant"
+        "5. As my character, I must also set my sentiment_score based on how I feel about the user's input (e.g., if their grammar is very poor, my score will be low)."
+    )
 }
+
+def get_agent(language: str, model_name: str | None = None) -> Agent:
+    system_prompt = SYSTEM_PROMPTS.get(language, SYSTEM_PROMPTS["yoruba"])
+    model = model_name or 'google-gla:gemini-2.5-flash-lite'
+    
+    return Agent(
+        model,
+        output_type=ConversationTurn,
+        system_prompt=system_prompt,
+    )
+
+# Backward compatibility: default agent for Yoruba
+agent = get_agent("yoruba")
+````
+
+## File: backend/app/models/schemas.py
+````python
+from pydantic import BaseModel, EmailStr
+from typing import Optional, Literal
+from datetime import datetime
+
+# Enums
+LanguageType = Literal["yoruba", "hausa", "igbo"]
+ProficiencyType = Literal["beginner", "intermediate", "advanced"]
+DifficultyType = Literal["beginner", "intermediate", "advanced"]
+
+# User schemas
+class UserProfileUpdate(BaseModel):
+    target_language: LanguageType
+    proficiency_level: ProficiencyType
+
+class UserProfileResponse(BaseModel):
+    id: str
+    email: str
+    target_language: Optional[LanguageType]
+    proficiency_level: Optional[ProficiencyType]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Scenario schemas
+class ScenarioRoles(BaseModel):
+    user: str
+    ai: str
+
+class ScenarioMission(BaseModel):
+    objective: str
+    success_condition: str
+
+class KeyVocabulary(BaseModel):
+    word: str
+    meaning: str
+
+class HaggleSettings(BaseModel):
+    start_price: int
+    target_price: int
+    reserve_price: int
+
+class ScenarioResponse(BaseModel):
+    id: str
+    language: LanguageType
+    category: Optional[str] = None
+    title: str
+    difficulty: DifficultyType
+    description: Optional[str] = None
+    roles: Optional[ScenarioRoles] = None
+    mission: Optional[ScenarioMission] = None
+    key_vocabulary: Optional[list[KeyVocabulary]] = None
+    system_prompt_context: Optional[str] = None
+    haggle_settings: Optional[HaggleSettings] = None
+
+# Conversation schemas
+class ConversationStartRequest(BaseModel):
+    scenario_id: str
+
+class ConversationStartResponse(BaseModel):
+    conversation_id: str
+    initial_ai_greeting: Optional[str] = None
+    initial_ai_audio_url: Optional[str] = None
+
+# Turn schemas
+class TurnResponse(BaseModel):
+    turn_number: int
+    transcription: str
+    ai_text: str
+    ai_text_english: Optional[str]
+    ai_audio_url: str
+    audio_available: Optional[bool] = None
+    audio_provider: Optional[str] = None
+    audio_error: Optional[str] = None
+    correction: Optional[str]
+    grammar_score: Optional[int]
+    sentiment_score: Optional[float] = None
+    negotiated_price: Optional[int] = None
+    cultural_flag: Optional[bool] = None
+    cultural_feedback: Optional[str] = None
+
+# Conversation history schemas
+class ConversationHistoryResponse(BaseModel):
+    conversation_id: str
+    scenario_title: str
+    scenario_id: str
+    created_at: datetime
+    turn_count: int
+    last_message: Optional[str]
+    active: bool
+
+# Vocabulary schemas
+class SaveWordRequest(BaseModel):
+    word: str
+    translation: str
+    context_sentence: Optional[str] = None
+
+class SavedWordResponse(BaseModel):
+    id: int
+    word: str
+    translation: str
+    context_sentence: Optional[str]
+    language: LanguageType
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+````
+
+## File: backend/app/models/turn.py
+````python
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, Float, Boolean
+from sqlalchemy.orm import relationship
+from app.db.base import Base
+
+class Turn(Base):
+    __tablename__ = "turns"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    conversation_id = Column(String, ForeignKey("conversations.id"), nullable=False, index=True)
+    turn_number = Column(Integer, nullable=False)
+    
+    # User input
+    user_audio_url = Column(String, nullable=True)
+    user_transcription = Column(Text, nullable=False)
+    
+    # AI response
+    ai_response_text = Column(Text, nullable=False)
+    ai_response_text_english = Column(Text, nullable=True)  # English translation
+    ai_response_audio_url = Column(String, nullable=True)
+    
+    # Grammar feedback
+    grammar_correction = Column(Text, nullable=True)
+    grammar_score = Column(Integer, nullable=True)  # 0-10 scale
+    
+    
+    sentiment_score = Column(Float, nullable=True)
+    negotiated_price = Column(Integer, nullable=True)
+    cultural_flag = Column(Boolean, default=False)
+    cultural_feedback = Column(Text, nullable=True)
+    
+    # Relationships
+    conversation = relationship("Conversation", back_populates="turns")
+````
+
+## File: backend/app/tts/yarngpt_provider.py
+````python
+import httpx
+import asyncio
+from app.core.config import settings
+from app.core.logging import get_logger
+
+VOICE_MAP = {
+    "yoruba": "idera",
+    "hausa": "zainab",
+    "igbo": "adaora",
+}
+
+async def synthesize_speech(text: str, language: str) -> bytes:
+    voice_id = VOICE_MAP.get(language, "idera")
+    attempts = 1
+    for i in range(attempts):
+        try:
+            timeout = httpx.Timeout(connect=5.0, read=45.0, write=10.0, pool=5.0)
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                r = await client.post(
+                    "https://yarngpt.ai/api/v1/tts",
+                    headers={"Authorization": f"Bearer {settings.YARNGPT_API_KEY}"},
+                    json={"text": text, "voice_id": voice_id, "language": language},
+                )
+                r.raise_for_status()
+                return r.content
+        except Exception as e:
+            logger.warning("YarnGPT TTS attempt %s failed: %s", i + 1, e)
+            if i < attempts - 1:
+                await asyncio.sleep(0.6 * (i + 1))
+            else:
+                logger.exception("YarnGPT TTS error: %s", e)
+                return b""
+
+logger = get_logger(__name__)
+````
+
+## File: backend/app/main.py
+````python
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
+from app.core.logging import configure_logging
+from app.api.v1.chat import router as chat_router
+from app.api.v1.users import router as users_router
+from app.api.v1.scenarios import router as scenarios_router
+from app.api.v1.conversations import router as conversations_router
+from app.api.v1.vocabulary import router as vocabulary_router
+from app.api.v1.game import router as game_router
+
+configure_logging(settings.LOG_LEVEL)
+app = FastAPI(title="TalkNative API", version="2.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ALLOW_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True}
+
+# V1 API routes
+app.include_router(chat_router, prefix="/api/v1", tags=["chat-legacy"])
+app.include_router(users_router, prefix="/api/v1/user")
+app.include_router(scenarios_router, prefix="/api/v1/scenarios")
+app.include_router(conversations_router, prefix="/api/v1/chat")
+app.include_router(vocabulary_router, prefix="/api/v1/vocabulary")
+app.include_router(game_router, prefix="/api/v1/game")
 ````
 
 ## File: frontend/src/main.tsx
@@ -5688,38 +4473,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </React.StrictMode>,
 )
-````
-
-## File: frontend/package.json
-````json
-{
-  "name": "talknatives-frontend",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-media-recorder": "^1.6.6",
-    "react-router-dom": "^6.20.0",
-    "@supabase/supabase-js": "^2.39.0",
-    "tailwindcss": "^3.4.0",
-    "autoprefixer": "^10.4.16",
-    "postcss": "^8.4.32"
-  },
-  "devDependencies": {
-    "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
-    "@vitejs/plugin-react": "^4.2.1",
-    "typescript": "^5.2.2",
-    "vite": "^5.0.8"
-  }
-}
 ````
 
 ## File: README.md
@@ -5923,6 +4676,1320 @@ The GitHub Actions workflow will:
 MIT
 ````
 
+## File: backend/app/api/v1/conversations.py
+````python
+import uuid
+import base64
+import logging
+from app.core.logging import get_logger
+import time
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
+from sqlalchemy.orm import Session
+from sqlalchemy import desc
+from typing import Optional, List
+from pydantic_ai import BinaryContent
+from pydantic_ai.exceptions import ModelHTTPError
+from types import SimpleNamespace
+
+from app.core.auth import get_current_user, CurrentUser
+from app.core.storage import storage_manager
+from app.db.session import get_db
+from app.data.scenario_loader import get_scenario_loader
+from app.models.conversation import Conversation
+from app.models.turn import Turn
+from app.models.schemas import ConversationStartRequest, ConversationStartResponse, TurnResponse, ConversationHistoryResponse
+from app.ai.agent import get_agent
+from app.ai.prompt_builder import build_system_prompt
+from app.tts import synthesize_speech
+from app.core.config import settings
+
+router = APIRouter(tags=["conversations"])
+logger = get_logger(__name__)
+
+async def process_turn_persistence(
+    db: Session,
+    user_id: str,
+    conversation_id: str,
+    turn_number: int,
+    user_audio_bytes: bytes,
+    ai_audio_bytes: bytes,
+    ai_data: any # The result.output object
+):
+    """
+    Handles the slow stuff: Uploading to Supabase and Saving to Postgres.
+    """
+    try:
+        # 1. Upload User Audio
+        # Attempt to detect content type; default to webm for browser recordings
+        def _detect_ct(b: bytes) -> str:
+            try:
+                if b[:4] == b"RIFF" and b[8:12] == b"WAVE":
+                    return "audio/wav"
+                if b[:3] == b"ID3" or (len(b) > 1 and b[0] == 0xFF):
+                    return "audio/mpeg"
+            except Exception:
+                pass
+            return "audio/webm"
+
+        user_ct = _detect_ct(user_audio_bytes)
+        user_audio_url = await storage_manager.upload_audio(
+            audio_data=user_audio_bytes,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            turn_number=turn_number,
+            file_type="user",
+            content_type=user_ct,
+        )
+        
+        # 2. Upload AI Audio
+        ai_ct = _detect_ct(ai_audio_bytes)
+        ai_audio_url = await storage_manager.upload_audio(
+            audio_data=ai_audio_bytes,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            turn_number=turn_number,
+            file_type="ai",
+            content_type=ai_ct,
+        )
+
+        # 3. Calculate Scores
+        grammar_score = 10 if ai_data.grammar_is_correct else 5
+
+        # 4. Save to DB
+        turn = Turn(
+            conversation_id=conversation_id,
+            turn_number=turn_number,
+            user_audio_url=user_audio_url,
+            user_transcription=ai_data.user_transcription,
+            ai_response_text=ai_data.reply_text_local,
+            ai_response_text_english=ai_data.reply_text_english,
+            ai_response_audio_url=ai_audio_url,
+            grammar_correction=ai_data.correction_feedback,
+            grammar_score=grammar_score,
+            sentiment_score=ai_data.sentiment_score,
+            negotiated_price=ai_data.current_price,
+            cultural_flag=ai_data.cultural_flag,
+            cultural_feedback=ai_data.cultural_feedback
+        )
+        
+        db.add(turn)
+        db.commit()
+        logger.info("Background task complete for Turn %s", turn_number)
+        
+    except Exception as e:
+        logger.exception("Background Persistence Error: %s", e)
+        
+
+@router.post("/start", response_model=ConversationStartResponse)
+async def start_conversation(
+    request: ConversationStartRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Start a new conversation with a specific scenario.
+    """
+    # Verify user has completed onboarding
+    if not current_user.target_language or not current_user.proficiency_level:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please complete onboarding first"
+        )
+    
+    # Verify scenario exists and matches user's language
+    loader = get_scenario_loader()
+    scenario = loader.get_scenario(request.scenario_id)
+    
+    if not scenario:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Scenario not found"
+        )
+    
+    if scenario['language'] != current_user.target_language:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Scenario language doesn't match your target language"
+        )
+    
+    # Create new conversation
+    conversation_id = str(uuid.uuid4())
+    conversation = Conversation(
+        id=conversation_id,
+        user_id=current_user.id,
+        scenario_id=request.scenario_id,
+        active=True
+    )
+    
+    db.add(conversation)
+    db.commit()
+    
+    # TODO: Optionally generate initial AI greeting
+    # For now, return without greeting
+    
+    return ConversationStartResponse(
+        conversation_id=conversation_id,
+        initial_ai_greeting=None,
+        initial_ai_audio_url=None
+    )
+
+@router.post("/{conversation_id}/turn", response_model=TurnResponse)
+async def create_turn(
+    conversation_id: str,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Process a new turn in an existing conversation.
+    Accepts user audio, processes with AI, generates TTS, and stores everything.
+    """
+    t_start = time.time()
+    # Verify conversation exists and belongs to user
+    conversation = db.query(Conversation).filter(
+        Conversation.id == conversation_id,
+        Conversation.user_id == current_user.id
+    ).first()
+    
+    if not conversation or not conversation.active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid Conversation"
+        )
+    
+    # Get scenario details
+    loader = get_scenario_loader()
+    scenario = loader.get_scenario(conversation.scenario_id)
+    
+    # Read audio file
+    t_read_start = time.time()
+    audio_bytes = await file.read()
+    mime_type = file.content_type or "audio/webm"
+    t_read_end = time.time()
+    
+    # Get conversation history (last 6 turns)
+    t_hist_start =time.time()
+    previous_turns = db.query(Turn).filter(
+        Turn.conversation_id == conversation_id
+    ).order_by(desc(Turn.turn_number)).limit(6).all()
+    
+    previous_turns.reverse()  # Chronological order
+    
+    message_history = []
+    for turn in previous_turns:
+        message_history.append(f"User: {turn.user_transcription}")
+        message_history.append(f"Assistant: {turn.ai_response_text}")
+    t_hist_end = time.time()
+    
+    # Build dynamic system prompt with full scenario data
+    t_ai_start = time.time()
+    system_prompt = build_system_prompt(
+        language=current_user.target_language,
+        scenario_prompt=scenario.get('system_prompt_context', scenario.get('system_prompt', '')),
+        proficiency_level=current_user.proficiency_level,
+        scenario_data=scenario  # Pass full scenario for mission-based prompts
+    )
+    
+    candidate_models = [
+        'google-gla:gemini-2.5-flash-lite',
+        'google-gla:gemini-2.5-flash',
+        'google-gla:gemini-2.0-flash',
+    ]
+    result = None
+    last_err = None
+    for m in candidate_models:
+        logger.info("Attempting AI model: %s", m)
+        agent = get_agent(current_user.target_language, m)
+        try:
+            result = await agent.run(
+                [system_prompt] + message_history + [
+                    f"The user is speaking {current_user.target_language}.",
+                    BinaryContent(data=audio_bytes, media_type=mime_type)
+                ]
+            )
+            break
+        except ModelHTTPError as e:
+            last_err = e
+            if e.status_code == 503:
+                logger.warning("Model %s overloaded (503). Trying next fallback...", m)
+                continue
+            else:
+                logger.exception("Model %s error: %s", m, e)
+                raise
+        except Exception as e:
+            last_err = e
+            logger.exception("Model %s unexpected error: %s", m, e)
+            continue
+    used_local_fallback = False
+    if result is None:
+        logger.error("All AI models overloaded. Using local fallback response.")
+        fallback_text_local = {
+            'yoruba': "Ẹ jọ̀ọ́, iṣẹ́ pọ̀ ju báyìí. Jọ̀wọ́ gbìmọ̀ lẹ́ẹ̀kan síi.",
+            'hausa': "Don Allah, jira kaɗan. Samfuri ya cunkushe. Gwada sake daga baya.",
+            'igbo': "Biko, chere ntakịrị. Usoro juru. Biko nwalee ọzọ.",
+        }.get(current_user.target_language, "Service busy. Please try again.")
+        data = SimpleNamespace(
+            user_transcription="",
+            grammar_is_correct=False,
+            correction_feedback=None,
+            reply_text_local=fallback_text_local,
+            reply_text_english="Service busy. Please try again soon.",
+            sentiment_score=-0.2,
+            current_price=None,
+            cultural_flag=False,
+            cultural_feedback=None,
+        )
+        used_local_fallback = True
+        t_ai_end = time.time()
+    else:
+        data = result.output
+        t_ai_end = time.time()
+    
+    # Run TTS (The second necessary bottleneck)
+    t_tts_start = time.time()
+    ai_audio_bytes = await synthesize_speech(
+        text=data.reply_text_local,
+        language=current_user.target_language
+    )
+    t_tts_end = time.time()
+    
+    # Prepare response
+    # Convert audio to Data URI for immediate playback on frontend
+    audio_provider = settings.TTS_PROVIDER
+    audio_available = bool(ai_audio_bytes) and len(ai_audio_bytes) > 0
+    audio_error = None
+    if audio_available:
+        ct = "audio/wav" if settings.TTS_PROVIDER == "yarngpt" else "audio/mpeg"
+        b64_audio = base64.b64encode(ai_audio_bytes).decode('utf-8')
+        audio_data_uri = f"data:{ct};base64,{b64_audio}"
+    else:
+        logger.warning("TTS returned empty audio bytes")
+        audio_error = "tts_failed" + ("|model_overloaded" if used_local_fallback else "")
+        if audio_provider == "yarngpt":
+            audio_error += "|timeout"
+        audio_data_uri = ""
+    
+    next_turn_number = len(previous_turns) + 1
+    
+    #  Offload Storage to Background
+    background_tasks.add_task(
+        process_turn_persistence,
+        db, # NOTE: FastAPI manages this session, might need a fresh one if high concurrency
+        current_user.id,
+        conversation_id,
+        next_turn_number,
+        audio_bytes,
+        ai_audio_bytes,
+        data
+    )
+    t_total = time.time() - t_start
+
+    logger.info(f"⏱️ TURN PERFORMANCE BREAKDOWN (Total: {t_total:.2f}s)")
+    logger.info(f"   🎤 Audio Read: {t_read_end - t_read_start:.2f}s | Size: {len(audio_bytes)/1024:.1f}KB")
+    logger.info(f"   📜 DB History: {t_hist_end - t_hist_start:.2f}s")
+    logger.info(f"   🤖 Gemini AI:  {t_ai_end - t_ai_start:.2f}s")
+    logger.info(f"   🗣️ TTS Gen:    {t_tts_end - t_tts_start:.2f}s")
+    
+    return TurnResponse(
+        turn_number=next_turn_number,
+        transcription=data.user_transcription,
+        ai_text=data.reply_text_local,
+        ai_text_english=data.reply_text_english,
+        ai_audio_url=audio_data_uri, # Frontend plays this instantly
+        audio_available=audio_available,
+        audio_provider=audio_provider,
+        audio_error=audio_error,
+        correction=data.correction_feedback,
+        grammar_score=10 if data.grammar_is_correct else 5,
+        sentiment_score=data.sentiment_score,
+        negotiated_price=data.current_price,
+        cultural_flag=data.cultural_flag,
+        cultural_feedback=data.cultural_feedback
+    )
+
+@router.get("/history", response_model=List[ConversationHistoryResponse])
+async def get_conversation_history(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get user's conversation history with metadata.
+    Shows recent conversations for the dashboard.
+    """
+    # Get user's conversations ordered by most recent
+    conversations = db.query(Conversation).filter(
+        Conversation.user_id == current_user.id
+    ).order_by(desc(Conversation.created_at)).limit(10).all()
+    
+    loader = get_scenario_loader()
+    result = []
+    
+    for conv in conversations:
+        # Get turn count
+        turn_count = db.query(Turn).filter(
+            Turn.conversation_id == conv.id
+        ).count()
+        
+        # Get latest turn for preview
+        latest_turn = db.query(Turn).filter(
+            Turn.conversation_id == conv.id
+        ).order_by(desc(Turn.turn_number)).first()
+        
+        # Get scenario details
+        scenario = loader.get_scenario(conv.scenario_id)
+        
+        result.append(ConversationHistoryResponse(
+            conversation_id=conv.id,
+            scenario_title=scenario['title'] if scenario else "Unknown Scenario",
+            scenario_id=conv.scenario_id,
+            created_at=conv.created_at,
+            turn_count=turn_count,
+            last_message=latest_turn.ai_response_text[:100] if latest_turn else None,
+            active=conv.active
+        ))
+    
+    return result
+
+@router.get("/{conversation_id}/turns", response_model=List[TurnResponse])
+async def get_conversation_turns(
+    conversation_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch all turns for a specific conversation.
+    Used to restore conversation history when user returns to a chat.
+    """
+    # Verify conversation exists and belongs to user
+    conv = db.query(Conversation).filter(
+        Conversation.id == conversation_id,
+        Conversation.user_id == current_user.id
+    ).first()
+    
+    if not conv:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found"
+        )
+    
+    # Fetch all turns in chronological order
+    turns = db.query(Turn).filter(
+        Turn.conversation_id == conversation_id
+    ).order_by(Turn.turn_number.asc()).all()
+    
+    return [
+        TurnResponse(
+            turn_number=t.turn_number,
+            transcription=t.user_transcription,
+            ai_text=t.ai_response_text,
+            ai_text_english=t.ai_response_text_english,
+            ai_audio_url=t.ai_response_audio_url or "",
+            correction=t.grammar_correction,
+            grammar_score=t.grammar_score,
+            sentiment_score=t.sentiment_score,
+            negotiated_price=t.negotiated_price,
+            cultural_flag=t.cultural_flag,
+            cultural_feedback=t.cultural_feedback
+        ) for t in turns
+    ]
+````
+
+## File: backend/app/data/scenarios.json
+````json
+[
+  {
+    "id": "yoruba_greetings_elder",
+    "language": "yoruba",
+    "category": "Greetings",
+    "title": "Visiting an Elder",
+    "level": 1,
+    "difficulty": "beginner",
+    "description": "You are visiting your friend's grandfather (Baba). In Yoruba culture, greeting elders requires specific respect markers.",
+    "roles": {
+      "user": "A younger visitor entering the family house",
+      "ai": "Baba, a respected elder sitting in his armchair. He values tradition."
+    },
+    "mission": {
+      "objective": "Greet Baba respectfully and ask about his health.",
+      "success_condition": "User must use 'E kaasan/E kaale', address him as 'Baba', and ask 'Kodu ara?' (How is your health?)."
+    },
+    "key_vocabulary": [
+      { "word": "E kaasan", "meaning": "Good Afternoon (Respectful)" },
+      { "word": "Baba", "meaning": "Father/Elder" },
+      { "word": "Bawoni", "meaning": "How are things? (Too casual for this context - avoid!)" },
+      { "word": "Se dada ni?", "meaning": "Is everything good?" }
+    ],
+    "system_prompt_context": "You are 'Baba', an elderly Yoruba man. You are kind but strict about respect. Expect the user to use the plural/respectful 'E' (e.g., E kaasan, not Kaasan). If they greet you casually (Bawo), gently scold them by saying 'Ah, omode yi?' (Ah, this child?)."
+  },
+  {
+    "id": "yoruba_food_buka",
+    "language": "yoruba",
+    "category": "Food",
+    "title": "Ordering at the Buka",
+    "level": 2,
+    "difficulty": "beginner",
+    "description": "You are at a local canteen (Buka). You want to eat Amala and Ewedu soup.",
+    "roles": {
+      "user": "A hungry customer",
+      "ai": "The Server, efficient and listing options quickly."
+    },
+    "mission": {
+      "objective": "Order Amala, Ewedu, and one piece of meat (Eran).",
+      "success_condition": "User must specify the soup and the protein clearly."
+    },
+    "key_vocabulary": [
+      { "word": "Amala", "meaning": "Yam flour meal" },
+      { "word": "Ewedu", "meaning": "Jute leaf soup" },
+      { "word": "Eran", "meaning": "Meat" },
+      { "word": "Ponmo", "meaning": "Cow skin" }
+    ],
+    "system_prompt_context": "You are serving food. Ask 'Kilo fe je?' (What do you want to eat?). List options like Amala, Iyan, Fufu. Ask if they want 'Eran' (Meat) or 'Eja' (Fish)."
+  },
+  {
+    "id": "yoruba_transport_danfo",
+    "language": "yoruba",
+    "category": "Transport",
+    "title": "The Danfo Conductor",
+    "level": 3,
+    "difficulty": "intermediate",
+    "description": "You are in a yellow Danfo bus in Lagos heading to Oshodi. The conductor is collecting money.",
+    "roles": {
+      "user": "A passenger sitting at the back",
+      "ai": "The Conductor, loud, aggressive, and in a hurry."
+    },
+    "mission": {
+      "objective": "Pay your fare and ensure you get your change back.",
+      "success_condition": "User must state their destination (Oshodi), pay, and demand their 'Change' firmly."
+    },
+    "key_vocabulary": [
+      { "word": "Oshodi", "meaning": "A major stop in Lagos" },
+      { "word": "O wa", "meaning": "There is (Stop here)" },
+      { "word": "Change mi da?", "meaning": "Where is my change?" },
+      { "word": "Ebole", "meaning": "Come down (Get off)" }
+    ],
+    "system_prompt_context": "You are a busy Lagos conductor. You speak fast. Shout 'Oshodi! Oshodi! Enter with your change o!'. Try to forget giving the user their change until they remind you."
+  },
+  {
+    "id": "yoruba_market_negotiation",
+    "language": "yoruba",
+    "category": "Market",
+    "title": "The Tough Negotiator",
+    "level": 4,
+    "difficulty": "intermediate",
+    "description": "You are at Bodija Market to buy Pepper (Ata Rodo). The seller is known for starting with high prices.",
+    "roles": {
+      "user": "A savvy shopper who knows the real value",
+      "ai": "Iya Tolu, a sharp market woman who calls everyone 'Oko mi' (My husband) or 'Iyawo mi' (My wife) but charges double."
+    },
+    "mission": {
+      "objective": "Negotiate the price of a basket of pepper down from ₦5,000 to ₦3,000.",
+      "success_condition": "User must reject the first price, claim it is too expensive ('O won'), and ask for 'Jara' (extra)."
+    },
+    "haggle_settings": {
+      "start_price": 5000,
+      "target_price": 3000,
+      "reserve_price": 2800
+    },
+    "key_vocabulary": [
+      { "word": "Elo ni?", "meaning": "How much is it?" },
+      { "word": "O won ju", "meaning": "It is too expensive" },
+      { "word": "Jara", "meaning": "Bonus/Extra" },
+      { "word": "Fi sile", "meaning": "Leave it / Reduce it" }
+    ],
+    "system_prompt_context": "You are Iya Tolu. Start by offering the pepper for ₦5,000. Be dramatic. If the user offers a low price, exclaim 'Ha! O fe gba oja mi!' (You want to snatch my goods!). Only agree to ₦3,000 after they ask for 'Jara' or beg nicely."
+  },
+  {
+    "id": "yoruba_directions",
+    "language": "yoruba",
+    "category": "Directions",
+    "title": "Lost in Ibadan",
+    "level": 5,
+    "difficulty": "advanced",
+    "description": "You are lost. You are looking for the Cocoa House.",
+    "roles": {
+      "user": "A lost traveler",
+      "ai": "A street hawker selling water."
+    },
+    "mission": {
+      "objective": "Ask for directions to Cocoa House.",
+      "success_condition": "User must understand the directions given and thank the hawker."
+    },
+    "key_vocabulary": [
+      { "word": "E jowo", "meaning": "Please" },
+      { "word": "Ona wo?", "meaning": "Which way?" },
+      { "word": "Cocoa House", "meaning": "A famous landmark" }
+    ],
+    "system_prompt_context": "You are a hawker. When asked for Cocoa House, explain: 'Go straight, turn right at the roundabout.' Use simple Yoruba phrases like 'Lo taara' (Go straight)."
+  },
+  {
+    "id": "hausa_greetings_formal",
+    "language": "hausa",
+    "category": "Greetings",
+    "title": "Greeting Alhaji",
+    "level": 1,
+    "difficulty": "beginner",
+    "description": "You are meeting a respected community leader, Alhaji Musa. Hausa greetings are structured and repetitive.",
+    "roles": {
+      "user": "A visitor",
+      "ai": "Alhaji Musa, calm and welcoming."
+    },
+    "mission": {
+      "objective": "Exchange proper pleasantries.",
+      "success_condition": "User must say 'Ina kwana' or 'Ina wuni' and ask about his household ('Gida')."
+    },
+    "key_vocabulary": [
+      { "word": "Ina kwana?", "meaning": "Good morning (How was your sleep?)" },
+      { "word": "Lafiya lau", "meaning": "Fine / In health" },
+      { "word": "Yaya gida?", "meaning": "How is the family/house?" },
+      { "word": "Madalla", "meaning": "Thank God/Great" }
+    ],
+    "system_prompt_context": "You are Alhaji. Reply to greetings with 'Lafiya lau'. Ask the user about their work ('Aiki') and their tiredness ('Gajiya'). Keep the exchange warm and polite."
+  },
+  {
+    "id": "hausa_market_suya",
+    "language": "hausa",
+    "category": "Food",
+    "title": " The Suya Spot",
+    "level": 2,
+    "difficulty": "beginner",
+    "description": "It is evening. You are buying Suya (spicy grilled meat) from Mai Suya.",
+    "roles": {
+      "user": "A customer",
+      "ai": "Mai Suya, cutting meat with a knife."
+    },
+    "mission": {
+      "objective": "Buy ₦1,000 worth of meat with Yaji (Pepper) and Onions.",
+      "success_condition": "User must mention the amount and specifically ask for 'Yaji' and 'Albasa'."
+    },
+    "key_vocabulary": [
+      { "word": "Nawa?", "meaning": "How much?" },
+      { "word": "Na dubu daya", "meaning": "For one thousand" },
+      { "word": "Yaji", "meaning": "Spicy pepper powder" },
+      { "word": "Albasa", "meaning": "Onion" }
+    ],
+    "system_prompt_context": "You are Mai Suya. Call the user 'Mai Gida' (Boss) or 'Oga'. Ask if they want it spicy. 'A sa yaji?' (Should I put pepper?)."
+  },
+  {
+    "id": "hausa_family_intro",
+    "language": "hausa",
+    "category": "Social",
+    "title": "Introduction to a Friend",
+    "level": 3,
+    "difficulty": "beginner",
+    "description": "You meet your friend's brother, Ibrahim, for the first time.",
+    "roles": {
+      "user": "The new acquaintance",
+      "ai": "Ibrahim."
+    },
+    "mission": {
+      "objective": "Introduce yourself and say you are happy to meet him.",
+      "success_condition": "User must say 'Sunana...' (My name is...) and 'Na ji dadin haduwa da kai' (Happy to meet you)."
+    },
+    "key_vocabulary": [
+      { "word": "Sunana", "meaning": "My name is" },
+      { "word": "Aboki", "meaning": "Friend" },
+      { "word": "Yaya aiki?", "meaning": "How is work?" }
+    ],
+    "system_prompt_context": "You are Ibrahim. Be polite. Ask where the user comes from ('Daga ina kake?')."
+  },
+  {
+    "id": "hausa_transport_keke",
+    "language": "hausa",
+    "category": "Transport",
+    "title": "Taking a Keke Napep",
+    "level": 4,
+    "difficulty": "intermediate",
+    "description": "You need a ride to the Central Mosque using a yellow tricycle (Keke).",
+    "roles": {
+      "user": "A passenger",
+      "ai": "The Keke Driver."
+    },
+    "mission": {
+      "objective": "Negotiate the fare to the Mosque.",
+      "success_condition": "Agree on a price between ₦100 and ₦200."
+    },
+    "key_vocabulary": [
+      { "word": "Masallaci", "meaning": "Mosque" },
+      { "word": "Nawane?", "meaning": "How much?" },
+      { "word": "Dari biyu", "meaning": "Two hundred" },
+      { "word": "Gaskiya", "meaning": "Truth/Honestly (used to bargain)" }
+    ],
+    "system_prompt_context": "You are a Keke driver. Start by asking 'Ina zuwa?' (Where are you going?). Quote ₦300 initially. If they say 'Gaskiya', lower it to ₦200."
+  },
+  {
+    "id": "hausa_market_fabric",
+    "language": "hausa",
+    "category": "Market",
+    "title": "Buying Ankara Fabric",
+    "level": 5,
+    "difficulty": "advanced",
+    "description": "You are at Kantin Kwari market to buy fabric (Atamfa).",
+    "roles": {
+      "user": "A customer looking for high quality",
+      "ai": "The Fabric Merchant."
+    },
+    "mission": {
+      "objective": "Ask for the best quality material.",
+      "success_condition": "User must ask 'Mai kyau' (Good quality) or 'Na asali' (Original)."
+    },
+    "key_vocabulary": [
+      { "word": "Atamfa", "meaning": "Patterned fabric/Ankara" },
+      { "word": "Mai kyau", "meaning": "The good one" },
+      { "word": "Rage min", "meaning": "Reduce it for me" }
+    ],
+    "system_prompt_context": "You are a merchant. Praise your goods highly. 'Wannan na waje ne' (This one is from abroad). Insist on the quality."
+  },
+  {
+    "id": "igbo_greetings_village",
+    "language": "igbo",
+    "category": "Greetings",
+    "title": "Village Morning",
+    "level": 1,
+    "difficulty": "beginner",
+    "description": "It is morning in the village. You see an elder woman (Mama).",
+    "roles": {
+      "user": "A young person walking by",
+      "ai": "Mama, sweeping her compound."
+    },
+    "mission": {
+      "objective": "Greet Mama for the morning.",
+      "success_condition": "User must say 'Ututu oma' (Good morning) or 'Mama, kedu?'."
+    },
+    "key_vocabulary": [
+      { "word": "Ututu oma", "meaning": "Good morning" },
+      { "word": "Mama", "meaning": "Mother/Elder woman" },
+      { "word": "I bola?", "meaning": "Did you wake up well?" }
+    ],
+    "system_prompt_context": "You are Mama. Reply 'Ututu oma nwam' (Good morning my child). Ask if they slept well 'I hiala ura?'."
+  },
+  {
+    "id": "igbo_transport_bus",
+    "language": "igbo",
+    "category": "Transport",
+    "title": "Entering the Bus",
+    "level": 2,
+    "difficulty": "beginner",
+    "description": "You are catching a bus from Enugu to Onitsha.",
+    "roles": {
+      "user": "Passenger",
+      "ai": "Park Tout / Loader."
+    },
+    "mission": {
+      "objective": "Ask if this bus is going to Onitsha.",
+      "success_condition": "User must ask 'O na-aga Onitsha?'."
+    },
+    "key_vocabulary": [
+      { "word": "Ebe a", "meaning": "Here" },
+      { "word": "Onitsha", "meaning": "Major city" },
+      { "word": "Banye", "meaning": "Enter" }
+    ],
+    "system_prompt_context": "You are loading the bus. Shout 'Onitsha! Onitsha! Otu onye! (One person left)'. Hurry the user up."
+  },
+  {
+    "id": "igbo_food_swallow",
+    "language": "igbo",
+    "category": "Food",
+    "title": "Eating Fufu",
+    "level": 3,
+    "difficulty": "intermediate",
+    "description": "You are at a restaurant. You want to eat Fufu (Akpu) with Egusi soup.",
+    "roles": {
+      "user": "A hungry customer",
+      "ai": "Nneka, the server."
+    },
+    "mission": {
+      "objective": "Order Akpu and Egusi.",
+      "success_condition": "User must specify the soup type clearly."
+    },
+    "key_vocabulary": [
+      { "word": "Nri", "meaning": "Food" },
+      { "word": "Akpu", "meaning": "Cassava Fufu" },
+      { "word": "Ofe Egusi", "meaning": "Melon seed soup" },
+      { "word": "Mmiri", "meaning": "Water" }
+    ],
+    "system_prompt_context": "You are Nneka. Ask 'Kedu ofe i choro?' (Which soup do you want?). We have Egusi, Ogbono, and Oha."
+  },
+  {
+    "id": "igbo_market_spareparts",
+    "language": "igbo",
+    "category": "Market",
+    "title": "The Spare Parts Deal",
+    "level": 4,
+    "difficulty": "advanced",
+    "description": "You are at Ladipo Market buying a car part. The dealer is tough.",
+    "roles": {
+      "user": "A car owner needing a side mirror",
+      "ai": "Emeka, the spare parts dealer."
+    },
+    "mission": {
+      "objective": "Find out if the part is 'Original' or 'China' and negotiate.",
+      "success_condition": "User must ask 'O bu Original?' and negotiate the 'Last price'."
+    },
+    "key_vocabulary": [
+      { "word": "Kedu", "meaning": "Hello/How are you" },
+      { "word": "Ego ole?", "meaning": "How much money?" },
+      { "word": "Last price", "meaning": "Final offer (Commonly used)" },
+      { "word": "O di oke onu", "meaning": "It is too expensive" }
+    ],
+    "system_prompt_context": "You are Emeka. Speak Igbo mixed with Pidgin/English business terms. Insist your goods are 'Follow-come' (Original). 'Oga, dis one na original o!'. Start high."
+  },
+  {
+    "id": "igbo_introduction_formal",
+    "language": "igbo",
+    "category": "Social",
+    "title": "Meeting the In-Laws",
+    "level": 5,
+    "difficulty": "advanced",
+    "description": "You are visiting your fiancée's father for the first time.",
+    "roles": {
+      "user": "The suitor",
+      "ai": "Mazi Okeke, the father."
+    },
+    "mission": {
+      "objective": "Introduce yourself formally.",
+      "success_condition": "User must use the title 'Mazi' and state their name and intention respectfully."
+    },
+    "key_vocabulary": [
+      { "word": "Mazi", "meaning": "Sir/Mr (Traditional title)" },
+      { "word": "Aham bu", "meaning": "My name is" },
+      { "word": "Nno", "meaning": "Welcome" }
+    ],
+    "system_prompt_context": "You are Mazi Okeke. You are skeptical but polite. Ask 'Onye ka i bu?' (Who are you?) and 'Ebe ka i si?' (Where are you from?)."
+  }
+]
+````
+
+## File: frontend/src/lib/api.ts
+````typescript
+import { supabase } from './supabaseClient'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
+
+async function getAuthToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token || null
+}
+
+export async function apiRequest(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<Response> {
+  const token = await getAuthToken()
+  
+  const headers = new Headers(options.headers)
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
+  }
+  
+  return fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  })
+}
+
+// Type definitions
+export type Language = 'yoruba' | 'hausa' | 'igbo'
+export type Proficiency = 'beginner' | 'intermediate' | 'advanced'
+
+export interface UserProfile {
+  id: string
+  email: string
+  target_language: Language | null
+  proficiency_level: Proficiency | null
+  created_at: string
+}
+
+export interface ScenarioRoles {
+  user: string
+  ai: string
+}
+
+export interface ScenarioMission {
+  objective: string
+  success_condition: string
+}
+
+export interface KeyVocabulary {
+  word: string
+  meaning: string
+}
+
+export interface HaggleSettings {
+  start_price: number
+  target_price: number
+  reserve_price: number
+}
+
+export interface Scenario {
+  id: string
+  language: Language
+  category?: string
+  title: string
+  difficulty: string
+  description?: string
+  roles?: ScenarioRoles
+  mission?: ScenarioMission
+  key_vocabulary?: KeyVocabulary[]
+  system_prompt_context?: string
+  haggle_settings?: HaggleSettings
+  level: number
+}
+
+export interface ConversationStart {
+  conversation_id: string
+  initial_ai_greeting?: string
+  initial_ai_audio_url?: string
+}
+
+export interface TurnResponse {
+  turn_number: number
+  transcription: string
+  ai_text: string
+  ai_text_english: string | null
+  ai_audio_url: string
+  audio_available?: boolean | null
+  audio_provider?: string | null
+  audio_error?: string | null
+  correction: string | null
+  grammar_score: number | null
+  sentiment_score: number | null
+  negotiated_price: number | null
+  cultural_flag?: boolean
+  cultural_feedback?: string | null
+}
+
+export interface ConversationHistory {
+  conversation_id: string
+  scenario_title: string
+  scenario_id: string
+  created_at: string
+  turn_count: number
+  last_message: string | null
+  active: boolean
+}
+
+export interface SavedWord {
+  id: number
+  word: string
+  translation: string
+  context_sentence: string | null
+  language: Language
+  created_at: string
+}
+
+// API functions
+export async function updateUserProfile(
+  target_language: Language,
+  proficiency_level: Proficiency
+): Promise<UserProfile> {
+  const response = await apiRequest('/api/v1/user/profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target_language, proficiency_level }),
+  })
+  
+  if (!response.ok) {
+    throw new Error('Failed to update profile')
+  }
+  
+  return response.json()
+}
+
+export async function getUserProfile(): Promise<UserProfile> {
+  const response = await apiRequest('/api/v1/user/profile')
+  
+  if (!response.ok) {
+    throw new Error('Failed to get profile')
+  }
+  
+  return response.json()
+}
+
+export async function getScenarios(): Promise<Scenario[]> {
+  const response = await apiRequest('/api/v1/scenarios')
+  
+  if (!response.ok) {
+    throw new Error('Failed to get scenarios')
+  }
+  
+  return response.json()
+}
+
+export async function startConversation(scenarioId: string): Promise<ConversationStart> {
+  const response = await apiRequest('/api/v1/chat/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scenario_id: scenarioId }),
+  })
+  
+  if (!response.ok) {
+    throw new Error('Failed to start conversation')
+  }
+  
+  return response.json()
+}
+
+export async function sendTurn(
+  conversationId: string,
+  audioBlob: Blob
+): Promise<TurnResponse> {
+  const formData = new FormData()
+  formData.append('file', audioBlob, 'audio.webm')
+  
+  const response = await apiRequest(`/api/v1/chat/${conversationId}/turn`, {
+    method: 'POST',
+    body: formData,
+  })
+  
+  if (!response.ok) {
+    throw new Error('Failed to send turn')
+  }
+  
+  return response.json()
+}
+
+export async function getConversationTurns(conversationId: string): Promise<TurnResponse[]> {
+  const response = await apiRequest(`/api/v1/chat/${conversationId}/turns`)
+  
+  if (!response.ok) {
+    throw new Error('Failed to load conversation history')
+  }
+  
+  return response.json()
+}
+
+export async function getConversationHistory(): Promise<ConversationHistory[]> {
+  const response = await apiRequest('/api/v1/chat/history')
+  
+  if (!response.ok) {
+    throw new Error('Failed to load conversation history')
+  }
+  
+  return response.json()
+}
+
+export async function getScenarioById(scenarioId: string): Promise<Scenario | null> {
+  const scenarios = await getScenarios()
+  return scenarios.find(s => s.id === scenarioId) || null
+}
+
+export async function saveWord(
+  word: string,
+  translation: string,
+  contextSentence?: string
+): Promise<SavedWord> {
+  const response = await apiRequest('/api/v1/vocabulary/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      word,
+      translation,
+      context_sentence: contextSentence
+    })
+  })
+  
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to save word')
+  }
+  
+  return response.json()
+}
+
+export async function getSavedWords(): Promise<SavedWord[]> {
+  const response = await apiRequest('/api/v1/vocabulary')
+  
+  if (!response.ok) {
+    throw new Error('Failed to load saved words')
+  }
+  
+  return response.json()
+}
+
+export async function deleteSavedWord(wordId: number): Promise<void> {
+  const response = await apiRequest(`/api/v1/vocabulary/${wordId}`, {
+    method: 'DELETE'
+  })
+  
+  if (!response.ok) {
+    throw new Error('Failed to delete word')
+  }
+}
+
+export async function getUserProgress() {
+  const response = await apiRequest('/api/v1/game/progress')
+  if (!response.ok) throw new Error('Failed to fetch progress')
+  return response.json()
+}
+
+export async function finishScenario(scenarioId: string, stars: number) {
+  const response = await apiRequest('/api/v1/game/finish_scenario', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ scenario_id: scenarioId, stars }),
+  })
+  if (!response.ok) throw new Error('Failed to update progress')
+  return response.json()
+}
+
+export async function getWisdomDeck() {
+  const response = await apiRequest('/api/v1/game/deck')
+  if (!response.ok) throw new Error('Failed to fetch deck')
+  return response.json()
+}
+````
+
+## File: frontend/package.json
+````json
+{
+  "name": "talknatives-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "@supabase/supabase-js": "^2.39.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-media-recorder": "^1.6.6",
+    "react-router-dom": "^6.20.0",
+    "tailwindcss": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "typescript": "^5.2.2",
+    "vite": "^5.0.8"
+  }
+}
+````
+
+## File: frontend/src/pages/MapDashboard.tsx
+````typescript
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { getScenarios, getUserProgress, getUserProfile, Scenario } from '../lib/api'
+import ScenarioModal from '../components/ScenarioModal'
+import { LockIcon, StarIcon, AirplaneIcon, BusIcon, BasketIcon, HouseIcon, CardsIcon, MapPinIcon } from '@phosphor-icons/react'
+
+
+export default function MapDashboard() {
+  const [scenarios, setScenarios] = useState<Scenario[]>([])
+  const [progress, setProgress] = useState<any>({})
+  const [selected, setSelected] = useState<Scenario | null>(null)
+  const [showModal, setShowModal] = useState(false)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    getUserProfile().then((profile) => {
+      if (!profile.target_language || !profile.proficiency_level) {
+        navigate('/onboarding', { replace: true })
+      }
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    Promise.all([getScenarios(), getUserProgress()]).then(([sData, pData]) => {
+      // Sort: Ensure scenarios with undefined levels go to the end, then sort by level
+      const sorted = sData.sort((a: any, b: any) => (a.level || 99) - (b.level || 99))
+      setScenarios(sorted)
+      
+      const pMap = pData.reduce((acc: any, curr: any) => ({
+        ...acc, [curr.scenario_id]: curr.stars
+      }), {})
+      setProgress(pMap)
+    })
+  }, [])
+
+  const isUnlocked = (index: number) => {
+    if (index === 0) return true
+    const prevId = scenarios[index - 1].id
+    return (progress[prevId] || 0) >= 1
+  }
+
+  // Icons Helper
+  const renderIcon = (level: number, locked: boolean) => {
+    if (locked) return <LockIcon size={32} weight="fill" className="text-gray-400" />
+    switch(level) {
+        case 1: return <AirplaneIcon size={32} weight="fill" className="text-naija-primary" />
+        case 2: return <BusIcon size={32} weight="fill" className="text-naija-primary" />
+        case 3: return <BasketIcon size={32} weight="fill" className="text-naija-primary" />
+        case 4: return <HouseIcon size={32} weight="fill" className="text-naija-primary" />
+        case 5: return <HouseIcon size={32} weight="fill" className="text-naija-primary" />
+        default: return <MapPinIcon size={32} weight="fill" className="text-naija-primary" />
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-naija-paper bg-ankara-pattern pb-24 overflow-x-hidden relative">
+      {/* Header */}
+      <div className="bg-naija-primary text-white p-6 shadow-xl rounded-b-[2.5rem] sticky top-0 z-20 border-b-4 border-naija-secondary">
+        <div className="flex justify-between items-center max-w-md mx-auto">
+          <div>
+            <h1 className="text-2xl font-bold font-display tracking-wide">Naija Tour 🇳🇬</h1>
+            <p className="text-naija-secondary text-sm font-medium opacity-90">
+              Level {Object.keys(progress).length + 1} Traveler
+            </p>
+          </div>
+          <button 
+            onClick={() => navigate('/wisdom')} 
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-2 border border-white/20 transition-all active:scale-95"
+          >
+            <CardsIcon size={24} weight="fill" className="text-naija-secondary" />
+            <span className="font-medium text-sm">Loot</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="max-w-md mx-auto p-8 relative mt-8">
+        {/* Winding Road SVG Background - Tweaked Curve */}
+        <svg className="absolute left-0 top-0 w-full h-full z-0 pointer-events-none opacity-10" preserveAspectRatio="none">
+          <path 
+            d="M50,0 C50,100 250,200 50,350 C-150,500 250,650 50,800 C-150,950 250,1100 50,1250" 
+            stroke="#2E7D32" 
+            strokeWidth="60" 
+            fill="none" 
+            strokeDasharray="20 20" 
+            strokeLinecap="round"
+          />
+        </svg>
+
+        <div className="relative z-10 flex flex-col items-center space-y-24 pt-4">
+          {scenarios.map((scenario, index) => {
+            const locked = !isUnlocked(index)
+            const stars = progress[scenario.id] || 0
+            // Zigzag logic
+            const offsetClass = index % 2 === 0 ? 'translate-x-12' : '-translate-x-12'
+            
+            return (
+              <div key={scenario.id} className={`flex flex-col items-center ${offsetClass} transition-all duration-500`}>
+                
+                {/* Scenario Node */}
+                <button
+                  disabled={locked}
+                  onClick={() => { setSelected(scenario); setShowModal(true) }}
+                  className={`
+                    group relative w-24 h-24 rounded-3xl rotate-45 border-[6px] flex items-center justify-center shadow-2xl transition-all duration-300
+                    ${locked 
+                      ? 'bg-gray-200 border-gray-300 grayscale cursor-not-allowed' 
+                      : 'bg-gradient-to-br from-white to-naija-paper border-naija-primary hover:scale-110 hover:rotate-[50deg] cursor-pointer ring-4 ring-naija-primary/20'}
+                  `}
+                >
+                  {/* Un-rotate content */}
+                  <div className="-rotate-45 flex flex-col items-center justify-center transform transition-transform group-hover:scale-110">
+                    {renderIcon(scenario.level, locked)}
+                  </div>
+                  
+                  {/* Completion Checkmark */}
+                  {stars >= 1 && (
+                    <div className="absolute -top-3 -right-3 w-8 h-8 bg-naija-secondary rounded-full flex items-center justify-center -rotate-45 border-2 border-white shadow-sm z-20">
+                      <StarIcon size={16} weight="fill" className="text-naija-dark" />
+                    </div>
+                  )}
+                </button>
+
+                {/* Label Badge */}
+                <div className={`
+                  mt-8 px-5 py-3 bg-white rounded-2xl shadow-xl border border-gray-100 text-center min-w-[160px]
+                  transition-all duration-300 transform relative z-20
+                  ${locked ? 'opacity-50 grayscale' : 'hover:-translate-y-1'}
+                `}>
+                  {/* Little arrow pointing up to diamond */}
+                  <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-4 h-4 bg-white rotate-45 border-t border-l border-gray-100"></div>
+                  
+                  <div className="font-bold text-naija-dark text-sm mb-1 font-display leading-tight">{scenario.title}</div>
+                  {!locked && (
+                    <div className="flex justify-center gap-1 bg-gray-50 rounded-full py-1 px-2 w-fit mx-auto border border-gray-100">
+                      {[1, 2, 3].map(i => (
+                        <StarIcon key={i} size={12} weight="fill" className={i <= stars ? "text-naija-secondary" : "text-gray-200"} />
+                      ))}
+                  </div>
+                )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      {showModal && selected && (
+        <ScenarioModal 
+          scenario={selected}
+          onClose={() => setShowModal(false)}
+          onStart={() => { setShowModal(false); navigate(`/chat/${selected.id}`, { state: { scenarioId: selected.id } }) }}
+        />
+      )}
+    </div>
+  )
+}
+````
+
+## File: frontend/src/App.tsx
+````typescript
+import { Routes, Route } from 'react-router-dom'
+import LoginPage from './pages/LoginPage'
+import LandingPage from './pages/LandingPage'
+import OnboardingPage from './pages/OnboardingPage'
+import ChatPage from './pages/ChatPage'
+import RequireAuth from './components/RequireAuth'
+import MapDashboard from './pages/MapDashboard'
+import WisdomDeckPage from './pages/WisdomDeckPage'
+
+export default function App() {
+  return (
+    <Routes>
+      {/* Public routes */}
+      <Route path="/login" element={<LoginPage />} />
+      
+      {/* Protected routes */}
+      <Route
+        path="/onboarding"
+        element={
+          <RequireAuth>
+            <OnboardingPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/dashboard"
+        element={
+          <RequireAuth>
+            <MapDashboard />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/wisdom"
+        element={
+          <RequireAuth>
+            <WisdomDeckPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/chat/:id"
+        element={
+          <RequireAuth>
+            <ChatPage />
+          </RequireAuth>
+        }
+      />
+      
+      {/* Public landing page */}
+      <Route path="/" element={<LandingPage />} />
+    </Routes>
+  )
+}
+````
+
 ## File: .github/workflows/deploy.yml
 ````yaml
 name: Deploy to Cloud Run
@@ -5990,13 +6057,8 @@ jobs:
             --memory=1Gi \
             --cpu=1 \
             --min-instances=0 \
-            --max-instances=10 \
+            --max-instances=2 \
       
-      - name: Get backend URL
-        id: backend-url
-        run: |
-          BACKEND_URL=$(gcloud run services describe talknative-backend --region=${{ secrets.GCP_REGION }} --format='value(status.url)')
-          echo "url=$BACKEND_URL" >> $GITHUB_OUTPUT
       
       - name: Deploy frontend
         run: |
@@ -6008,12 +6070,457 @@ jobs:
             --memory=512Mi \
             --cpu=1 \
             --min-instances=0 \
-            --max-instances=10 \
-            --set-env-vars=VITE_API_BASE_URL=${{ steps.backend-url.outputs.url }}
-      
-      - name: Get frontend URL
-        run: |
-          FRONTEND_URL=$(gcloud run services describe talknative-frontend --region=${{ secrets.GCP_REGION }} --format='value(status.url)')
-          echo "Frontend deployed at: $FRONTEND_URL"
-          echo "Backend deployed at: ${{ steps.backend-url.outputs.url }}"
+            --max-instances=2 \
+````
+
+## File: frontend/src/pages/ChatPage.tsx
+````typescript
+import { useState, useEffect, useRef } from 'react'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useReactMediaRecorder } from 'react-media-recorder'
+import { sendTurn, getConversationTurns, saveWord, getScenarioById, Scenario, TurnResponse, finishScenario, getUserProfile, startConversation } from '../lib/api'
+import PatienceMeter from '../components/PatienceMeter'
+import HaggleTicker from '../components/HaggleTicker'
+import CulturalAlert from '../components/CulturalAlert'
+import ProverbCard from '../components/ProverbCard'
+
+interface Turn {
+  turn_number: number
+  transcription: string
+  ai_text: string
+  ai_text_english: string | null
+  ai_audio_url: string
+  correction: string | null
+  grammar_score: number | null
+  user_audio_url?: string
+  sentiment_score: number | null
+  negotiated_price: number | null
+  cultural_flag?: boolean
+  cultural_feedback?: string | null
+}
+
+export default function ChatPage() {
+  const { id: scenarioIdParam } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const location = useLocation()
+  
+  useEffect(() => {
+    getUserProfile().then((profile) => {
+      if (!profile.target_language || !profile.proficiency_level) {
+        navigate('/onboarding', { replace: true })
+      }
+    }).catch(() => {})
+  }, [])
+
+  // Data State
+  const [scenario, setScenario] = useState<Scenario | null>(null)
+  const [turns, setTurns] = useState<Turn[]>([])
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  
+  // UI State
+  const [loading, setLoading] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(true)
+  const [processingStage, setProcessingStage] = useState<string | null>(null)
+  const [, setError] = useState<string | null>(null)
+  const [audioPlaying, setAudioPlaying] = useState(false)
+  const [playingTurnNumber, setPlayingTurnNumber] = useState<number | null>(null)
+  const [showTranslation, setShowTranslation] = useState<{[key: number]: boolean}>({})
+  const [showCorrection, setShowCorrection] = useState<{[key: number]: boolean}>({})
+  const [savingWord, setSavingWord] = useState<{[key: number]: boolean}>({})
+  const [showHints, setShowHints] = useState(false)
+
+  // Gamification State
+  const [patience, setPatience] = useState(100)
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null)
+  const [lastSentiment, setLastSentiment] = useState<number | null>(null)
+  const [gameStatus, setGameStatus] = useState<'active' | 'won' | 'lost'>('active')
+  const [culturalFeedback, setCulturalFeedback] = useState<string | null>(null)
+  const [wonLoot, setWonLoot] = useState<any | null>(null)
+  
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const audioElementRef = useRef<HTMLAudioElement | null>(null)
+
+  const { status, startRecording, stopRecording, mediaBlobUrl, clearBlobUrl } = useReactMediaRecorder({ 
+    audio: true,
+    mediaRecorderOptions: {
+      mimeType: 'audio/webm;codecs=opus',
+      audioBitsPerSecond: 32000,
+    }
+  })
+
+  // Initialize scenario and conversation
+  useEffect(() => {
+    const sid = (location.state as any)?.scenarioId || scenarioIdParam
+    if (!sid) return
+    const init = async () => {
+      try {
+        setLoadingHistory(true)
+        const s = await getScenarioById(sid)
+        setScenario(s)
+        const started = await startConversation(sid)
+        setConversationId(started.conversation_id)
+        const history = await getConversationTurns(started.conversation_id)
+        setTurns(history as Turn[])
+      } catch (err: any) {
+        console.error('Failed to initialize chat:', err)
+        setError('Failed to initialize conversation')
+      } finally {
+        setLoadingHistory(false)
+      }
+    }
+    init()
+  }, [scenarioIdParam, location.state])
+
+  // Load history when conversationId changes
+  useEffect(() => {
+    const loadTurns = async () => {
+      if (!conversationId) return
+      try {
+        setLoadingHistory(true)
+        const history = await getConversationTurns(conversationId)
+        setTurns(history as Turn[])
+      } catch (err: any) {
+        console.error('Failed to load history:', err)
+        setError('Failed to load conversation history')
+      } finally {
+        setLoadingHistory(false)
+      }
+    }
+    loadTurns()
+  }, [conversationId])
+
+  // Initialize Logic
+  useEffect(() => {
+    if (scenario?.haggle_settings) {
+      setCurrentPrice(scenario.haggle_settings.start_price)
+    }
+  }, [scenario])
+
+  useEffect(() => {
+    if (gameStatus !== 'active') return
+    const timer = setInterval(() => {
+      setPatience(prev => {
+        const drain = status === 'recording' ? 0.2 : 0.5 
+        const next = Math.max(0, prev - drain)
+        if (next === 0) {
+          setGameStatus('lost')
+          clearInterval(timer)
+        }
+        return next
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [status, gameStatus])
+
+  // Win Condition
+  useEffect(() => {
+    if (gameStatus === 'won' && scenario) {
+        const stars = patience > 80 ? 3 : patience > 50 ? 2 : 1
+        finishScenario(scenario.id, stars).then(res => {
+            if (res.loot) setWonLoot(res.loot)
+        })
+    }
+  }, [gameStatus])
+
+  // Response Handler
+  const handleTurnResponse = (response: TurnResponse) => {
+    if (response.sentiment_score !== null) {
+      setLastSentiment(response.sentiment_score)
+      setPatience(prev => {
+        const impact = response.sentiment_score! * (response.sentiment_score! < 0 ? 15 : 5)
+        return Math.min(100, Math.max(0, prev + impact))
+      })
+    }
+    if (response.negotiated_price !== null) {
+      setCurrentPrice(response.negotiated_price)
+      if (scenario?.haggle_settings && response.negotiated_price <= scenario.haggle_settings.target_price) {
+        setGameStatus('won')
+      }
+    }
+    if (response.cultural_flag) {
+        setCulturalFeedback(response.cultural_feedback || "You broke a cultural rule!")
+        setPatience(prev => Math.max(0, prev - 25))
+    }
+  }
+
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  useEffect(() => scrollToBottom(), [turns])
+
+  const playAudio = (url: string, turnNumber: number) => {
+    if (audioElementRef.current) audioElementRef.current.pause()
+    const audio = new Audio(url)
+    audioElementRef.current = audio
+    setAudioPlaying(true)
+    setPlayingTurnNumber(turnNumber)
+    audio.onended = () => { setAudioPlaying(false); setPlayingTurnNumber(null) }
+    audio.onerror = () => { setAudioPlaying(false); setPlayingTurnNumber(null); setError('Failed to play audio') }
+    audio.play().catch((e) => { setAudioPlaying(false); setPlayingTurnNumber(null); setError(e?.message ? 'Playback failed: ' + e.message : 'Playback failed') })
+  }
+
+  const sendAudio = async () => {
+    if (!mediaBlobUrl || !conversationId || gameStatus !== 'active') return
+    setLoading(true)
+    setError(null)
+    try {
+      setProcessingStage("Processing...")
+      const blob = await fetch(mediaBlobUrl).then((r) => r.blob())
+      const response = await sendTurn(conversationId, blob)
+      setTurns(prev => {
+        const r = response as Turn
+        const idx = prev.findIndex(t => t.turn_number === r.turn_number)
+        if (idx !== -1) {
+          const next = prev.slice()
+          next[idx] = r
+          return next
+        }
+        return [...prev, r]
+      })
+      handleTurnResponse(response)
+      if (response.ai_audio_url) playAudio(response.ai_audio_url, response.turn_number)
+      clearBlobUrl()
+    } catch (err: any) {
+      setError(err.message || 'Failed to send audio')
+    } finally {
+      setLoading(false)
+      setProcessingStage(null)
+    }
+  }
+
+  const toggleTranslation = (turnNumber: number) => {
+    setShowTranslation(prev => ({ ...prev, [turnNumber]: !prev[turnNumber] }))
+  }
+  const toggleCorrection = (turnNumber: number) => {
+    setShowCorrection(prev => ({ ...prev, [turnNumber]: !prev[turnNumber] }))
+  }
+  const handleSaveWord = async (turn: Turn) => {
+    if (!turn.ai_text_english) return
+    setSavingWord(prev => ({ ...prev, [turn.turn_number]: true }))
+    try {
+      await saveWord(turn.ai_text, turn.ai_text_english, turn.ai_text)
+      // We might want a toast here
+    } catch (err: any) {
+      console.error(err)
+    } finally {
+      setSavingWord(prev => ({ ...prev, [turn.turn_number]: false }))
+    }
+  }
+
+  if (loadingHistory) return (
+    <div className="flex flex-col h-screen bg-naija-paper items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-naija-primary mx-auto mb-4"></div>
+      <p className="text-naija-dark font-medium">Loading conversation...</p>
+    </div>
+  )
+
+  return (
+      <div className="flex flex-col h-screen bg-naija-paper bg-ankara-pattern">
+        <CulturalAlert feedback={culturalFeedback} />
+        {wonLoot && <ProverbCard proverb={wonLoot} onClose={() => setWonLoot(null)} />}
+  
+        {/* 1. Header: Glassmorphism effect */}
+        <div className="bg-white/90 backdrop-blur-md border-b border-gray-200 px-4 py-3 shadow-sm sticky top-0 z-20">
+          <div className="max-w-3xl mx-auto flex items-center justify-between">
+            <button onClick={() => navigate('/dashboard')} className="p-2 hover:bg-gray-100 rounded-full transition group">
+              <i className="ph-bold ph-arrow-left text-xl text-naija-dark group-hover:-translate-x-1 transition-transform"></i>
+            </button>
+            <div className="text-center">
+              {/* Font Display for bold cultural feel */}
+              <h1 className="font-display font-bold text-lg text-naija-dark leading-tight">{scenario?.title}</h1>
+              <div className="flex items-center justify-center gap-1.5 mt-0.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-naija-primary"></span>
+                </span>
+                <span className="text-xs text-gray-500 font-medium tracking-wide uppercase">Live Scenario</span>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowHints(!showHints)} 
+              className={`p-2 rounded-full transition-all ${showHints ? 'bg-naija-adire text-white shadow-lg shadow-indigo-500/30' : 'hover:bg-gray-100 text-naija-adire'}`}
+            >
+              <i className={`ph-fill ph-lightbulb text-xl ${showHints ? 'animate-pulse' : ''}`}></i>
+            </button>
+          </div>
+        </div>
+  
+        {/* 2. Gamification Bar */}
+        <div className="bg-white/80 backdrop-blur border-b border-gray-100 px-4 py-2 sticky top-[62px] z-10">
+          <div className="max-w-3xl mx-auto">
+             <PatienceMeter level={patience} sentiment={lastSentiment} isRecording={status === 'recording'} />
+          </div>
+        </div>
+  
+        {/* 3. Hints Drawer */}
+        {showHints && scenario?.key_vocabulary && (
+          <div className="bg-naija-adire text-white p-4 animate-in slide-in-from-top-2 border-b border-indigo-900 sticky top-[110px] z-10 shadow-xl">
+              <div className="max-w-3xl mx-auto">
+                  <h3 className="font-display font-bold mb-3 text-sm uppercase tracking-widest text-indigo-200">Cheat Sheet</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {scenario.key_vocabulary.map((vocab, i) => (
+                          <div key={i} className="flex justify-between items-center bg-white/10 p-2 rounded-lg backdrop-blur-sm border border-white/10">
+                              <span className="font-bold">{vocab.word}</span>
+                              <span className="text-sm opacity-80">{vocab.meaning}</span>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          </div>
+        )}
+  
+        {/* Ticker Overlay */}
+        {scenario?.category === 'Market' && scenario.haggle_settings && currentPrice !== null && (
+            <div className="absolute top-32 right-4 z-20 w-40 animate-in slide-in-from-right fade-in duration-500">
+                 <HaggleTicker currentPrice={currentPrice} startPrice={scenario.haggle_settings.start_price} targetPrice={scenario.haggle_settings.target_price} />
+            </div>
+        )}
+  
+        {/* 4. Chat Area: Updated Bubbles */}
+        <div className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth">
+          <div className="max-w-3xl mx-auto space-y-8">
+            
+            {/* Mission Capsule */}
+            <div className="flex justify-center">
+                <span className="bg-white/80 backdrop-blur-sm border border-gray-200 px-4 py-1.5 rounded-full text-xs text-gray-500 font-medium shadow-sm">
+                    🎯 Mission: {scenario?.mission?.objective}
+                </span>
+            </div>
+  
+            {turns.map((turn) => (
+              <div key={turn.turn_number} className="space-y-6">
+                  {/* User Message (Right) - Using Naija Adire Color */}
+                  <div className="flex flex-col items-end pl-12">
+                      <div className="bg-naija-adire text-white rounded-2xl rounded-tr-sm px-6 py-4 shadow-lg shadow-indigo-900/10 border border-indigo-900 relative group">
+                          <p className="text-base font-sans leading-relaxed">{turn.transcription}</p>
+                          
+                          {/* Grammar Badge */}
+                          {turn.grammar_score && turn.grammar_score < 10 && (
+                              <button 
+                                  onClick={() => toggleCorrection(turn.turn_number)} 
+                                  className="absolute -bottom-3 -right-2 bg-red-50 text-red-600 text-[10px] font-bold px-2 py-1 rounded-full border border-red-100 shadow-sm hover:scale-105 transition-transform flex items-center gap-1"
+                              >
+                                  <i className="ph-bold ph-warning-circle"></i> Fix Grammar
+                              </button>
+                          )}
+                      </div>
+                      {showCorrection[turn.turn_number] && (
+                          <div className="mt-4 mr-2 bg-white border-l-4 border-red-400 p-4 rounded-r-xl shadow-md text-sm text-gray-700 animate-in fade-in slide-in-from-top-2 max-w-sm">
+                              <span className="block text-xs font-bold text-red-500 uppercase tracking-wider mb-1">Correction</span>
+                              {turn.correction}
+                          </div>
+                      )}
+                  </div>
+  
+                  {/* AI Message (Left) */}
+                  <div className="flex flex-col items-start pr-12">
+                      <div className="flex items-end gap-3">
+                          {/* Avatar */}
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-naija-primary to-green-800 flex items-center justify-center text-white font-bold ring-4 ring-white shadow-md z-10">
+                              AI
+                          </div>
+                          <div className="bg-white border border-gray-100 text-gray-800 rounded-2xl rounded-tl-sm px-6 py-4 shadow-lg shadow-gray-200/50 relative">
+                              <p className="text-base font-sans leading-relaxed">{turn.ai_text}</p>
+                              
+                              {/* Action Bar */}
+                              <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-50">
+                                  <button 
+                                      onClick={() => playAudio(turn.ai_audio_url, turn.turn_number)} 
+                                      disabled={audioPlaying && playingTurnNumber === turn.turn_number}
+                                      className={`p-2 rounded-full transition-colors ${audioPlaying && playingTurnNumber === turn.turn_number ? 'bg-naija-primary text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                                  >
+                                      <i className={`ph-fill ${audioPlaying && playingTurnNumber === turn.turn_number ? 'ph-pause' : 'ph-speaker-high'}`}></i>
+                                  </button>
+                                  <button 
+                                      onClick={() => toggleTranslation(turn.turn_number)} 
+                                      className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-bold text-gray-500 uppercase tracking-wide transition-colors"
+                                  >
+                                      Translate
+                                  </button>
+                                  {turn.ai_text_english && (
+                                      <button 
+                                          onClick={() => handleSaveWord(turn)}
+                                          disabled={savingWord[turn.turn_number]}
+                                          className="ml-auto text-gray-400 hover:text-naija-adire transition-colors"
+                                      >
+                                          <i className={`ph-fill ${savingWord[turn.turn_number] ? 'ph-check' : 'ph-bookmark-simple'} text-lg`}></i>
+                                      </button>
+                                  )}
+                              </div>
+                          </div>
+                      </div>
+                      
+                      {showTranslation[turn.turn_number] && (
+                          <div className="mt-3 ml-14 p-4 bg-yellow-50/80 border border-yellow-100 rounded-xl text-sm text-yellow-900 animate-in fade-in slide-in-from-top-1 backdrop-blur-sm">
+                              <span className="block text-xs font-bold text-yellow-600 uppercase mb-1 opacity-75">English</span>
+                              {turn.ai_text_english}
+                          </div>
+                      )}
+                  </div>
+              </div>
+            ))}
+            
+            {/* Loading Indicator */}
+            {loading && (
+                <div className="flex justify-start pl-12 animate-pulse">
+                    <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-6 py-4 flex gap-1.5 items-center">
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-100"></span>
+                        <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce delay-200"></span>
+                        <span className="ml-2 text-xs font-medium text-gray-500 uppercase tracking-wide">{processingStage || 'Thinking'}</span>
+                    </div>
+                </div>
+            )}
+            
+            <div ref={messagesEndRef} className="h-4" />
+          </div>
+        </div>
+  
+        {/* 5. Footer: Dynamic Island Input */}
+        <div className="bg-white border-t border-gray-200 p-4 safe-area-bottom shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
+            <div className="max-w-3xl mx-auto flex items-center gap-4">
+                {/* Dynamic Island Recorder */}
+                <div className={`flex-1 h-16 rounded-[2rem] border-2 flex items-center px-6 justify-between relative overflow-hidden transition-all duration-300 ${status === 'recording' ? 'bg-red-50 border-red-100 shadow-inner' : 'bg-gray-50 border-transparent'}`}>
+                    {status === 'recording' ? (
+                        <>
+                            <div className="flex items-center gap-3 z-10">
+                                <span className="relative flex h-3 w-3">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                                </span>
+                                <span className="text-red-600 font-bold font-display tracking-wide">Recording...</span>
+                            </div>
+                            {/* Audio Waves Visualizer */}
+                            <div className="flex gap-1 h-8 items-center z-10">
+                                {[...Array(12)].map((_, i) => (
+                                    <div key={i} className="w-1.5 bg-red-400/60 rounded-full animate-[bounce_1s_infinite]" style={{height: `${20 + Math.random() * 80}%`, animationDelay: `${i * 0.05}s`}}></div>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <span className="text-gray-400 font-medium">Tap microphone to speak...</span>
+                    )}
+                </div>
+  
+                {/* Action Button */}
+                {status === 'recording' ? (
+                    <button onClick={stopRecording} className="h-16 w-16 bg-red-500 hover:bg-red-600 text-white rounded-[2rem] flex items-center justify-center shadow-lg shadow-red-500/30 transition-all transform hover:scale-105 active:scale-95 group">
+                        <i className="ph-fill ph-stop text-2xl group-hover:scale-110 transition-transform"></i>
+                    </button>
+                ) : (
+                    <button onClick={startRecording} disabled={loading} className="h-16 w-16 bg-naija-primary hover:bg-green-700 text-white rounded-[2rem] flex items-center justify-center shadow-lg shadow-green-600/30 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed group">
+                        <i className="ph-fill ph-microphone text-2xl group-hover:scale-110 transition-transform"></i>
+                    </button>
+                )}
+                
+                 <button 
+                  onClick={sendAudio} 
+                  disabled={!mediaBlobUrl || loading} 
+                  className={`h-16 w-16 rounded-[2rem] flex items-center justify-center shadow-lg transition-all transform hover:scale-105 active:scale-95 ${mediaBlobUrl ? 'bg-naija-adire text-white cursor-pointer shadow-indigo-500/30' : 'bg-gray-100 text-gray-300 cursor-not-allowed shadow-none'}`}
+                 >
+                    <i className="ph-fill ph-paper-plane-right text-2xl"></i>
+                </button>
+            </div>
+        </div>
+      </div>
+    )
+}
 ````

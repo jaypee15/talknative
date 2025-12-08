@@ -1,38 +1,55 @@
-from pydantic_ai import Agent
+import base64
+from google import genai
+from google.genai import types
+from app.core.config import settings
 from app.core.logging import get_logger
 
+logger = get_logger(__name__)
+
+# Map local languages to specific voice configs if available, 
+# otherwise use a standard clear voice.
 VOICE_MAP = {
-    "yoruba": "Kainene",
-    "hausa": "Aoife",
-    "igbo": "Kainene",
+    "yoruba": "Archernar", 
+    "hausa": "Achird",
+    "igbo": "Algenib",
 }
 
 async def synthesize_speech(text: str, language: str) -> bytes:
-    from pydantic import BaseModel, Field
-    
-    class AudioResponse(BaseModel):
-        audio_data: bytes = Field(description="The audio data")
-    
-    voice_name = VOICE_MAP.get(language, "Kainene")
+    """
+    Generate speech using Google Gemini via direct API.
+    """
+    voice_name = VOICE_MAP.get(language, "Archernar")
     
     try:
-        agent = Agent('google-gla:gemini-2.5-flash-preview-tts')
+        client = genai.Client(api_key=settings.GOOGLE_API_KEY)
         
-        result = await agent.run(
-            f"Generate speech for this text in {language}",
-            message_history=[],
-            model_settings={
-                "voice_config": {
-                    "voice_name": voice_name
-                }
-            }
+        model_id = "gemini-2.5-flash-tts" 
+
+        # Explicitly configure response modality to AUDIO
+        response = await client.aio.models.generate_content(
+            model=model_id,
+            contents=f"Read this text aloud naturally. Text: {text}",
+            config=types.GenerateContentConfig(
+                response_modalities=["AUDIO"],
+                speech_config=types.SpeechConfig(
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                            voice_name=voice_name
+                        )
+                    )
+                )
+            )
         )
-        
-        if hasattr(result, 'audio_data'):
-            return result.audio_data
+
+        # Extract audio bytes from the response parts
+        for part in response.candidates[0].content.parts:
+            if part.inline_data and part.inline_data.mime_type.startswith("audio"):
+                # The SDK usually returns base64 string in inline_data.data for audio
+                return base64.b64decode(part.inline_data.data)
+
+        logger.error("Gemini response contained no audio data")
         return b""
+
     except Exception as e:
-        logger.exception("Gemini TTS error: %s", e)
+        logger.exception("Gemini TTS Direct API error: %s", e)
         return b""
- 
-logger = get_logger(__name__)
